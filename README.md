@@ -16,7 +16,7 @@ Users of this software are expected to use this software responsibly while abidi
 
 To install the extension, follow these steps:
 
-+ In web-ui, go to the "Extensions" tab and use this URL `https://github.com/s0md3v/roop` in the "install from URL" tab.
++ In web-ui, go to the "Extensions" tab and use this URL `https://github.com/s0md3v/sd-webui-roop` in the "install from URL" tab.
 + Download the "inswapper_128.onnx" model from [here](ttps://huggingface.co/henryruhs/roop/resolve/main/inswapper_128.onnx) and put it inside `<web-ui-dir>/extensions/roop/models` directory.
 
 On Windows, Microsoft Visual C++ 14.0 or greater must be installed before installing the extension. [During the install, make sure to include the Python and C++ packages.](https://github.com/s0md3v/roop/issues/153)
