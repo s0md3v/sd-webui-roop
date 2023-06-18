@@ -13,7 +13,6 @@ from modules.face_restoration import FaceRestoration
 
 from scripts.roop_logging import logger
 from scripts.swapper import UpscaleOptions, swap_face, ImageResult
-from scripts.cimage import check_batch
 from scripts.roop_version import version_flag
 import os
 
@@ -179,8 +178,7 @@ class FaceSwapScript(scripts.Script):
 
     def postprocess_batch(self, p, *args, **kwargs):
         if self.enable:
-            images = kwargs["images"]
-            images[:] = check_batch(images)[:]
+            return images
 
     def postprocess_image(self, p, script_pp: scripts.PostprocessImageArgs, *args):
         if self.enable and self.swap_in_generated:
