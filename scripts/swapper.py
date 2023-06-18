@@ -28,40 +28,7 @@ class UpscaleOptions:
     face_restorer: FaceRestoration = None
     restorer_visibility: float = 0.5
 
-
-def save_image(img: Image, filename: str):
-    convert_to_sd(img).save(filename)
-
-
-def cosine_distance(vector1: np.ndarray, vector2: np.ndarray) -> float:
-    vec1 = vector1.flatten()
-    vec2 = vector2.flatten()
-
-    dot_product = np.dot(vec1, vec2)
-    norm1 = np.linalg.norm(vec1)
-    norm2 = np.linalg.norm(vec2)
-
-    cosine_distance = 1 - (dot_product / (norm1 * norm2))
-    return cosine_distance
-
-
-def cosine_similarity(test_vec: np.ndarray, source_vecs: List[np.ndarray]) -> float:
-    cos_dist = sum(cosine_distance(test_vec, source_vec) for source_vec in source_vecs)
-    average_cos_dist = cos_dist / len(source_vecs)
-    return average_cos_dist
-
-
-ANALYSIS_MODEL = None
-
-
-def getAnalysisModel():
-    global ANALYSIS_MODEL
-    if ANALYSIS_MODEL is None:
-        ANALYSIS_MODEL = insightface.app.FaceAnalysis(
-            name="buffalo_l", providers=providers
-        )
-    return ANALYSIS_MODEL
-
+ANALYSIS_MODEL = insightface.app.FaceAnalysis(name="buffalo_l", providers=providers)
 
 FS_MODEL = None
 CURRENT_FS_MODEL_PATH = None
@@ -108,7 +75,7 @@ def upscale_image(image: Image, upscale_options: UpscaleOptions):
 
 
 def get_face_single(img_data: np.ndarray, face_index=0, det_size=(640, 640)):
-    face_analyser = copy.deepcopy(getAnalysisModel())
+    face_analyser = copy.deepcopy(ANALYSIS_MODEL)
     face_analyser.prepare(ctx_id=0, det_size=det_size)
     face = face_analyser.get(img_data)
 
@@ -140,8 +107,10 @@ def swap_face(
     faces_index: Set[int] = {0},
     upscale_options: Union[UpscaleOptions, None] = None,
 ) -> ImageResult:
-    fn = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    if model is not None:
+    result_image = target_img
+    converted = convert_to_sd(target_img)
+    scale, fn = converted[0], converted[1]
+    if model is not None and not scale:
         source_img = cv2.cvtColor(np.array(source_img), cv2.COLOR_RGB2BGR)
         target_img = cv2.cvtColor(np.array(target_img), cv2.COLOR_RGB2BGR)
         source_face = get_face_single(source_img, face_index=0)
@@ -160,8 +129,7 @@ def swap_face(
             result_image = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
             if upscale_options is not None:
                 result_image = upscale_image(result_image, upscale_options)
-
-            save_image(result_image, fn.name)
         else:
             logger.info("No source face found")
+    result_image.save(fn.name)
     return ImageResult(path=fn.name)
