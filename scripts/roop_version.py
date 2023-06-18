@@ -1,4 +1,4 @@
-version_flag = "v0.0.1"
+version_flag = "v0.0.1-uncensored"
 
 from scripts.roop_logging import logger
 
