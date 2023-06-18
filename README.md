@@ -17,7 +17,7 @@ Users of this software are expected to use this software responsibly while abidi
 To install the extension, follow these steps:
 
 + In web-ui, go to the "Extensions" tab and use this URL `https://github.com/s0md3v/sd-webui-roop` in the "install from URL" tab.
-+ Download the "inswapper_128.onnx" model from [here](https://huggingface.co/henryruhs/roop/resolve/main/inswapper_128.onnx) and put it inside `<web-ui-dir>/extensions/roop/models` directory.
++ Restart the UI
 
 On Windows, Microsoft Visual C++ 14.0 or greater must be installed before installing the extension. [During the install, make sure to include the Python and C++ packages.](https://github.com/s0md3v/roop/issues/153)
 
@@ -33,8 +33,10 @@ Use the "Restore Face" option. You can also try the "Upscaler" option or for mor
 ### There are multiple faces in result
 Select the face numbers you wish to swap using the "Comma separated face number(s)" option.
 
-### The result is totally black
-This means roop detected that your image is NSFW.
+### The face didn't get swapped
+Did you click "Enable"?
+
+If you did and your console doesn't show any errors, it means roop detected that your image is either NSFW or wasn't able to detect a face at all.
 
 ### Img2Img
 
