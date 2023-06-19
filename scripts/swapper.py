@@ -17,7 +17,7 @@ from modules.face_restoration import FaceRestoration, restore_faces
 from modules.upscaler import Upscaler, UpscalerData
 from scripts.roop_logging import logger
 
-providers = onnxruntime.get_available_providers()
+providers = ["CPUExecutionProvider"]
 
 
 @dataclass
