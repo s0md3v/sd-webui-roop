@@ -13,13 +13,13 @@ The developers of this software are aware of its possible unethical applicaitons
 Users of this software are expected to use this software responsibly while abiding the local law. If face of a real person is being used, users are suggested to get consent from the concerned person and clearly mention that it is a deepfake when posting content online. Developers of this software will not be responsible for actions of end-users.
 
 ## Installation
+First of all, if you can't install it for some reason, don't open an issue here. Google your errors.
 
-To install the extension, follow these steps:
+> On Windows, Microsoft Visual C++ 14.0 or greater must be installed before installing the extension. [During the install, make sure to include the Python and C++ packages.](https://github.com/s0md3v/roop/issues/153)
 
++ Run this command: `pip install insightface==0.7.3`
 + In web-ui, go to the "Extensions" tab and use this URL `https://github.com/s0md3v/sd-webui-roop` in the "install from URL" tab.
 + Restart the UI
-
-On Windows, Microsoft Visual C++ 14.0 or greater must be installed before installing the extension. [During the install, make sure to include the Python and C++ packages.](https://github.com/s0md3v/roop/issues/153)
 
 ## Usage
 
