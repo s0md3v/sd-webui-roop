@@ -15,7 +15,7 @@ Users of this software are expected to use this software responsibly while abidi
 ## Installation
 First of all, if you can't install it for some reason, don't open an issue here. Google your errors.
 
-> On Windows, Microsoft Visual C++ 14.0 or greater must be installed before installing the extension. [During the install, make sure to include the Python and C++ packages.](https://github.com/s0md3v/roop/issues/153)
+> On Windows, download and install [Visual Studio](https://visualstudio.microsoft.com/downloads/). During the install, make sure to include the Python and C++ packages.
 
 + Run this command: `pip install insightface==0.7.3`
 + In web-ui, go to the "Extensions" tab and use this URL `https://github.com/s0md3v/sd-webui-roop` in the "install from URL" tab.
@@ -27,19 +27,16 @@ First of all, if you can't install it for some reason, don't open an issue here.
 2. Turn on the "Enable" checkbox
 3. That's it, now the generated result will have the face you selected
 
-### The result face is blurry
-Use the "Restore Face" option. You can also try the "Upscaler" option or for more finer control, use an upscaler from the "Extras" tab.
+## Tips
+#### Getting good quality results
+First of all, make sure the "Restore Face" option. You can also try the "Upscaler" option or for more finer control, use an upscaler from the "Extras" tab.
 
-### There are multiple faces in result
-Select the face numbers you wish to swap using the "Comma separated face number(s)" option.
+For even better quality, use img2img with denoise set to `0.1` and gradually increase it until you get a balance of quality and resembelance.
 
-### The face didn't get swapped
+#### Replacing specific faces
+If there are multiple faces in an image, select the face numbers you wish to swap using the "Comma separated face number(s)" option.
+
+#### The face didn't get swapped?
 Did you click "Enable"?
 
 If you did and your console doesn't show any errors, it means roop detected that your image is either NSFW or wasn't able to detect a face at all.
-
-### Img2Img
-
-You can choose to activate the swap on the source image or on the generated image, or on both using the checkboxes. Activating on source image allows you to start from a given base and apply the diffusion process to it.
-
-Inpainting should work but only the masked part will be swapped.
