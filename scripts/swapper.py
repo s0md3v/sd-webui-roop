@@ -111,6 +111,15 @@ def swap_face(
     converted = convert_to_sd(target_img)
     scale, fn = converted[0], converted[1]
     if model is not None and not scale:
+        if isinstance(source_img, str):  # source_img is a base64 string
+            import base64, io
+            if 'base64,' in source_img:  # check if the base64 string has a data URL scheme
+                base64_data = source_img.split('base64,')[-1]
+                img_bytes = base64.b64decode(base64_data)
+            else:
+                # if no data URL scheme, just decode
+                img_bytes = base64.b64decode(source_img)
+            source_img = Image.open(io.BytesIO(img_bytes))
         source_img = cv2.cvtColor(np.array(source_img), cv2.COLOR_RGB2BGR)
         target_img = cv2.cvtColor(np.array(target_img), cv2.COLOR_RGB2BGR)
         source_face = get_face_single(source_img, face_index=0)
