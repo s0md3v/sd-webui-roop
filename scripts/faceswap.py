@@ -18,9 +18,6 @@ import os
 
 
 def get_models():
-    models_path = os.path.join(
-        scripts.basedir(), "extensions/sd-webui-roop/models/*"
-    )
     models = glob.glob(models_path)
     models_path = os.path.join(scripts.basedir(), "models/roop/*")
     models += glob.glob(models_path)
