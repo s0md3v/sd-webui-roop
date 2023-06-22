@@ -21,6 +21,8 @@ First of all, if you can't install it for some reason, don't open an issue here.
 + In web-ui, go to the "Extensions" tab and use this URL `https://github.com/s0md3v/sd-webui-roop` in the "install from URL" tab.
 + Restart the UI
 
+> If you encounter 'NoneType' object has no attribute 'get' error, download the inswapper_128.onnx model and put it inside <webui_dir>/models/roop/ directory.
+
 ## Usage
 
 1. Under "roop" drop-down menu, import an image containing a face.
