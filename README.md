@@ -19,9 +19,10 @@ First of all, if you can't install it for some reason, don't open an issue here.
 
 + Run this command: `pip install insightface==0.7.3`
 + In web-ui, go to the "Extensions" tab and use this URL `https://github.com/s0md3v/sd-webui-roop` in the "install from URL" tab.
-+ Restart the UI
++ Close webui and run it again
++ If you encounter `'NoneType' object has no attribute 'get'` error, download the [inswapper_128.onnx](https://huggingface.co/henryruhs/roop/resolve/main/inswapper_128.onnx) model and put it inside `<webui_dir>/models/roop/` directory.
 
-> If you encounter 'NoneType' object has no attribute 'get' error, download the inswapper_128.onnx model and put it inside <webui_dir>/models/roop/ directory.
+For rest of the errors, use google. Good luck.
 
 ## Usage
 
