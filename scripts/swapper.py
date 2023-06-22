@@ -17,7 +17,7 @@ from modules.face_restoration import FaceRestoration, restore_faces
 from modules.upscaler import Upscaler, UpscalerData
 from scripts.roop_logging import logger
 
-providers = ["CPUExecutionProvider"]
+providers = onnxruntime.get_available_providers()
 
 
 @dataclass
@@ -27,8 +27,6 @@ class UpscaleOptions:
     upscale_visibility: float = 0.5
     face_restorer: FaceRestoration = None
     restorer_visibility: float = 0.5
-
-ANALYSIS_MODEL = insightface.app.FaceAnalysis(name="buffalo_l", providers=providers)
 
 FS_MODEL = None
 CURRENT_FS_MODEL_PATH = None
@@ -75,7 +73,7 @@ def upscale_image(image: Image, upscale_options: UpscaleOptions):
 
 
 def get_face_single(img_data: np.ndarray, face_index=0, det_size=(640, 640)):
-    face_analyser = copy.deepcopy(ANALYSIS_MODEL)
+    face_analyser = insightface.app.FaceAnalysis(name="buffalo_l", providers=providers)
     face_analyser.prepare(ctx_id=0, det_size=det_size)
     face = face_analyser.get(img_data)
 
