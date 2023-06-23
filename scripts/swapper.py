@@ -139,7 +139,7 @@ def swap_face(
                         logger.info(f"No target face found for {face_num}")
                     if len(source_face_index) > 1:
                         source_face_index += 1
-                        source_face = get_face_single(source_img, face_index=source_faces_index[source_face_index]
+                        source_face = get_face_single(source_img, face_index=source_faces_index[source_face_index])
                 else:
                     logger.info(f"No source face found for face number {source_face_index}.")
 
