@@ -102,14 +102,10 @@ def swap_face(
     source_img: Image.Image,
     target_img: Image.Image,
     model: Union[str, None] = None,
-    source_faces_index: None,
-    faces_index: None,
+    source_faces_index: List[int] = [0],
+    faces_index: List[int] = [0],
     upscale_options: Union[UpscaleOptions, None] = None,
 ) -> ImageResult:
-    if source_faces_index is None:
-        source_faces_index = [0]
-    if faces_index is None:
-        faces_index = [0]
     result_image = target_img
     converted = convert_to_sd(target_img)
     scale, fn = converted[0], converted[1]
