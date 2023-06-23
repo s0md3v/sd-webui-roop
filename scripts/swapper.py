@@ -122,7 +122,7 @@ def swap_face(
         source_img = cv2.cvtColor(np.array(source_img), cv2.COLOR_RGB2BGR)
         target_img = cv2.cvtColor(np.array(target_img), cv2.COLOR_RGB2BGR)
         source_face = get_face_single(source_img, face_index=source_faces_index[0])
-        if len(source_faces_index) != 0 or len(source_faces_index) != 1 or len(source_faces_index) != len(faces_index):
+        if len(source_faces_index) != 0 and len(source_faces_index) != 1 and len(source_faces_index) != len(faces_index):
             logger.info(f'Source Faces must have no entries (default=0), one entry, or same number of entries as target faces.')
         elif source_face is not None:
             result = target_img
