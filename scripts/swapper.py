@@ -131,15 +131,16 @@ def swap_face(
 
             source_face_idx = 0
             for face_num in faces_index:
+                if len(source_faces_index) > 1 and source_face_idx > 0:
+                    source_face = get_face_single(source_img, face_index=source_faces_index[source_face_idx])
+                source_face_idx += 1
+
                 if source_face is not None:
                     target_face = get_face_single(target_img, face_index=face_num)
                     if target_face is not None:
                         result = face_swapper.get(result, target_face, source_face)
                     else:
                         logger.info(f"No target face found for {face_num}")
-                    if len(source_faces_index) > 1:
-                        source_face_idx += 1
-                        source_face = get_face_single(source_img, face_index=source_faces_index[source_face_idx])
                 else:
                     logger.info(f"No source face found for face number {source_face_idx}.")
 
