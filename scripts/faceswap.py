@@ -156,7 +156,7 @@ class FaceSwapScript(scripts.Script):
         self.upscaler_name = upscaler_name
         self.swap_in_generated = swap_in_generated
         self.model = model
-        self.source_face_index = [
+        self.source_faces_index = [
             int(x) for x in source_faces_index.strip(",").split(",") if x.isnumeric()
         ]
         self.faces_index = [
