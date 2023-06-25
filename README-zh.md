@@ -1,5 +1,5 @@
 # StableDiffusion roop
-[English](README.md)| [中文](README-zh.md)
+[English](README.md) | [中文](README-zh.md)
 
 这是StableDiffusion的[AUTOMATIC1111 web-ui](https://github.com/AUTOMATIC1111/stable-diffusion-webui/)的扩展，可以在图像中替换人脸。它基于[roop](https://github.com/s0md3v/roop)，但将分别开发。
 
