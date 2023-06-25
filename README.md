@@ -6,23 +6,23 @@ This is an extension for StableDiffusion's [AUTOMATIC1111 web-ui](https://github
 
 ### Disclaimer
 
-This software is meant to be a productive contribution to the rapidly growing AI-generated media industry. It will help artists with tasks such as animating a custom character or using the character as a model for clothing etc.
+这个软件旨在为快速增长的人工智能生成媒体行业做出有效的贡献。它将协助艺术家完成一些任务，例如动画制作自定义角色或将该角色用作服装模特等。
 
-The developers of this software are aware of its possible unethical applicaitons and are committed to take preventative measures against them. It has a built-in check which prevents the program from working on inappropriate media. We will continue to develop this project in the positive direction while adhering to law and ethics. This project may be shut down or include watermarks on the output if requested by law.
+该软件的开发者知道它可能存在的不道德应用，并致力于采取预防措施。它具有内置的检查机制，防止该程序用于不适当的媒体中。我们将继续朝着积极的方向开发这个项目，恪守法律和道德标准。如果根据法律要求，这个项目可能会被关闭或在输出上加上水印。
 
-Users of this software are expected to use this software responsibly while abiding the local law. If face of a real person is being used, users are suggested to get consent from the concerned person and clearly mention that it is a deepfake when posting content online. Developers of this software will not be responsible for actions of end-users.
+使用这个软件的用户应该在遵守当地法律的同时负责任地使用。如果使用了真实人物的面部，用户建议从有关人士获得同意，并在发布在线内容时清楚说明它是深度伪造的。该软件的开发者不对最终用户的行为负责。
 
 ## Installation
-First of all, if you can't install it for some reason, don't open an issue here. Google your errors.
+首先，如果由于某些原因无法安装，不要在此处开立问题事项。通过谷歌搜索你遇到的错误。
 
-> On Windows, download and install [Visual Studio](https://visualstudio.microsoft.com/downloads/). During the install, make sure to include the Python and C++ packages.
+针对Windows，下载并安装Visual Studio。在安装过程中，确保安装了Python和C++程序包。
 
-+ Run this command: `pip install insightface==0.7.3`
-+ In web-ui, go to the "Extensions" tab and use this URL `https://github.com/s0md3v/sd-webui-roop` in the "install from URL" tab.
-+ Close webui and run it again
-+ If you encounter `'NoneType' object has no attribute 'get'` error, download the [inswapper_128.onnx](https://huggingface.co/henryruhs/roop/resolve/main/inswapper_128.onnx) model and put it inside `<webui_dir>/models/roop/` directory.
++ 运行此命令：`pip install insightface==0.7.3`
++ 在web-ui中，转到“扩展”选项卡，并在“从URL安装”选项卡中使用此URL `https://github.com/s0md3v/sd-webui-roop`
++ 关闭web-ui并重新运行它
++ 如果遇到" 'NoneType' object has no attribute 'get' "错误，请下载inwapper_128.onnx模型，并将其放置在`<webui_dir>/models/roop/`目录中。
 
-For rest of the errors, use google. Good luck.
+对于其余的错误，请使用谷歌搜索。祝你好运。
 
 ## Usage
 
