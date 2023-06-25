@@ -1,10 +1,10 @@
-# roop for StableDiffusion
+# StableDiffusion的roop
 
-This is an extension for StableDiffusion's [AUTOMATIC1111 web-ui](https://github.com/AUTOMATIC1111/stable-diffusion-webui/) that allows face-replacement in images. It is based on [roop](https://github.com/s0md3v/roop) but will be developed seperately.
+这是StableDiffusion的[AUTOMATIC1111 web-ui](https://github.com/AUTOMATIC1111/stable-diffusion-webui/)的扩展，可以在图像中替换人脸。它基于[roop](https://github.com/s0md3v/roop)，但将分别开发。
 
 ![example](example/example.png)
 
-### Disclaimer
+### 免责声明
 
 这个软件旨在为快速增长的人工智能生成媒体行业做出有效的贡献。它将协助艺术家完成一些任务，例如动画制作自定义角色或将该角色用作服装模特等。
 
@@ -24,22 +24,22 @@ This is an extension for StableDiffusion's [AUTOMATIC1111 web-ui](https://github
 
 对于其余的错误，请使用谷歌搜索。祝你好运。
 
-## Usage
+## 使用方法
 
-1. Under "roop" drop-down menu, import an image containing a face.
-2. Turn on the "Enable" checkbox
-3. That's it, now the generated result will have the face you selected
+1. 在“roop”下拉菜单中导入一张包含人脸的图像。
+2. 打开“启用”复选框
+3. 就这样，现在生成的结果将包含您选择的人脸。
 
-## Tips
-#### Getting good quality results
-First of all, make sure the "Restore Face" option is enabled. You can also try the "Upscaler" option or for more finer control, use an upscaler from the "Extras" tab.
+## 提示
+#### 获得高质量的结果
+首先，确保“恢复面容”选项已启用。您还可以尝试“ Upscaler”选项或更细致的控制，使用“ Extras”选项卡中的较高比例尺。
 
-For even better quality, use img2img with denoise set to `0.1` and gradually increase it until you get a balance of quality and resembelance.
+为了获得更好的质量，请使用denoise设置为`0.1`的img2img，并逐渐增加它，直到您获得质量和相似度的平衡为止。
 
-#### Replacing specific faces
-If there are multiple faces in an image, select the face numbers you wish to swap using the "Comma separated face number(s)" option.
+#### 替换特定的面孔
+如果图像中有多个面孔，请使用“逗号分隔的面部编号（s）”选项选择您想要交换的面部编号。
 
-#### The face didn't get swapped?
-Did you click "Enable"?
+#### 这张脸没有被交换吗？
+你有单击“启用”吗？
 
-If you did and your console doesn't show any errors, it means roop detected that your image is either NSFW or wasn't able to detect a face at all.
+如果您确实这样做，并且您的控制台没有显示任何错误，则表示roop检测到您的图像要么不适合家庭，要么无法检测到面部。
