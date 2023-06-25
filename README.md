@@ -1,6 +1,6 @@
 # roop for StableDiffusion
 
-[中文说明](README-zh.md)
+[English](README.md)| [中文](README-zh.md)
 
 This is an extension for StableDiffusion's [AUTOMATIC1111 web-ui](https://github.com/AUTOMATIC1111/stable-diffusion-webui/) that allows face-replacement in images. It is based on [roop](https://github.com/s0md3v/roop) but will be developed seperately.
 
