@@ -8,6 +8,7 @@ import urllib.request
 req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
 
 models_dir = os.path.abspath("models/roop")
+faces_dir = os.path.abspath("models/roop/faces")
 model_url = "https://huggingface.co/henryruhs/roop/resolve/main/inswapper_128.onnx"
 model_name = os.path.basename(model_url)
 model_path = os.path.join(models_dir, model_name)
@@ -21,8 +22,12 @@ def download(url, path):
 if not os.path.exists(models_dir):
     os.makedirs(models_dir)
 
+if not os.path.exists(faces_dir):
+    os.makedirs(faces_dir)
+
 if not os.path.exists(model_path):
     download(model_url, model_path)
+
 
 print("Checking roop requirements")
 with open(req_file) as file:

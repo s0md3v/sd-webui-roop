@@ -1,7 +1,5 @@
 import copy
-import math
 import os
-import tempfile
 from dataclasses import dataclass
 from typing import List, Union, Dict, Set, Tuple
 
@@ -11,22 +9,32 @@ from PIL import Image
 
 import insightface
 import onnxruntime
-from scripts.cimage import convert_to_sd
-
-from modules.face_restoration import FaceRestoration, restore_faces
-from modules.upscaler import Upscaler, UpscalerData
 from scripts.roop_logging import logger
+from pprint import pprint
+from sklearn.metrics.pairwise import cosine_similarity
 
-providers = onnxruntime.get_available_providers()
+from scripts.imgutils import pil_to_cv2, cv2_to_pil
+
+providers = ["CPUExecutionProvider"]
 
 
-@dataclass
-class UpscaleOptions:
-    scale: int = 1
-    upscaler: UpscalerData = None
-    upscale_visibility: float = 0.5
-    face_restorer: FaceRestoration = None
-    restorer_visibility: float = 0.5
+def cosine_similarity_face(face1, face2) -> float:
+    vec1 = face1.embedding.reshape(1, -1)
+    vec2 = face2.embedding.reshape(1, -1)
+    return max(0, cosine_similarity(vec1, vec2)[0, 0])
+
+
+ANALYSIS_MODEL = None
+
+
+def getAnalysisModel():
+    global ANALYSIS_MODEL
+    if ANALYSIS_MODEL is None:
+        ANALYSIS_MODEL = insightface.app.FaceAnalysis(
+            name="buffalo_l", providers=providers
+        )
+    return ANALYSIS_MODEL
+
 
 FS_MODEL = None
 CURRENT_FS_MODEL_PATH = None
@@ -42,101 +50,119 @@ def getFaceSwapModel(model_path: str):
     return FS_MODEL
 
 
-def upscale_image(image: Image, upscale_options: UpscaleOptions):
-    result_image = image
-    if upscale_options.upscaler is not None and upscale_options.upscaler.name != "None":
-        original_image = result_image.copy()
-        logger.info(
-            "Upscale with %s scale = %s",
-            upscale_options.upscaler.name,
-            upscale_options.scale,
-        )
-        result_image = upscale_options.upscaler.scaler.upscale(
-            image, upscale_options.scale, upscale_options.upscaler.data_path
-        )
-        if upscale_options.scale == 1:
-            result_image = Image.blend(
-                original_image, result_image, upscale_options.upscale_visibility
-            )
-
-    if upscale_options.face_restorer is not None:
-        original_image = result_image.copy()
-        logger.info("Restore face with %s", upscale_options.face_restorer.name())
-        numpy_image = np.array(result_image)
-        numpy_image = upscale_options.face_restorer.restore(numpy_image)
-        restored_image = Image.fromarray(numpy_image)
-        result_image = Image.blend(
-            original_image, restored_image, upscale_options.restorer_visibility
-        )
-
-    return result_image
-
-
-def get_face_single(img_data: np.ndarray, face_index=0, det_size=(640, 640)):
-    face_analyser = insightface.app.FaceAnalysis(name="buffalo_l", providers=providers)
+def get_faces(img_data: np.ndarray, det_size=(640, 640)):
+    face_analyser = copy.deepcopy(getAnalysisModel())
     face_analyser.prepare(ctx_id=0, det_size=det_size)
     face = face_analyser.get(img_data)
 
     if len(face) == 0 and det_size[0] > 320 and det_size[1] > 320:
         det_size_half = (det_size[0] // 2, det_size[1] // 2)
-        return get_face_single(img_data, face_index=face_index, det_size=det_size_half)
+        return get_faces(img_data, det_size=det_size_half)
 
     try:
-        return sorted(face, key=lambda x: x.bbox[0])[face_index]
+        return sorted(face, key=lambda x: x.bbox[0])
     except IndexError:
         return None
 
 
+def compare_faces(img1: Image.Image, img2: Image.Image) -> float:
+    face1 = get_or_default(get_faces(pil_to_cv2(img1)), 0, None)
+    face2 = get_or_default(get_faces(pil_to_cv2(img2)), 0, None)
+
+    if face1 is not None and face2 is not None:
+        return cosine_similarity_face(face1, face2)
+    return -1
+
+
 @dataclass
 class ImageResult:
-    path: Union[str, None] = None
-    similarity: Union[Dict[int, float], None] = None  # face, 0..1
+    image: Image.Image
+    similarity: Dict[int, float]  # face, 0..1
+    ref_similarity: Dict[int, float]  # face, 0..1
 
-    def image(self) -> Union[Image.Image, None]:
-        if self.path:
-            return Image.open(self.path)
-        return None
+
+def get_or_default(l, index, default):
+    return l[index] if index < len(l) else default
+
+def get_faces_from_img_files(files) :
+    faces = []
+    if len(files) > 0 :
+        for file in files :
+            print("open", file.name)
+            img = Image.open(file.name)
+            face = get_or_default(get_faces(pil_to_cv2(img)), 0, None)
+            if face is not None :
+                faces.append(face)
+    return faces
+
+
+def blend_faces(faces) :
+    embeddings = [face.embedding for face in faces]
+    if len(embeddings)> 0 :
+        embedding_shape = embeddings[0].shape
+        for embedding in embeddings:
+            if embedding.shape != embedding_shape:
+                raise ValueError("embedding shape mismatch")
+
+        blended_embedding = np.mean(embeddings, axis=0)
+        blended = faces[0]
+        blended.embedding = blended_embedding
+        return blended
+    return None
 
 
 def swap_face(
-    source_img: Image.Image,
+    reference_face: np.ndarray,
+    source_face: np.ndarray,
     target_img: Image.Image,
-    model: Union[str, None] = None,
+    model: str,
     faces_index: Set[int] = {0},
-    upscale_options: Union[UpscaleOptions, None] = None,
+    same_gender=True,
 ) -> ImageResult:
-    result_image = target_img
-    converted = convert_to_sd(target_img)
-    scale, fn = converted[0], converted[1]
-    if model is not None and not scale:
-        if isinstance(source_img, str):  # source_img is a base64 string
-            import base64, io
-            if 'base64,' in source_img:  # check if the base64 string has a data URL scheme
-                base64_data = source_img.split('base64,')[-1]
-                img_bytes = base64.b64decode(base64_data)
-            else:
-                # if no data URL scheme, just decode
-                img_bytes = base64.b64decode(source_img)
-            source_img = Image.open(io.BytesIO(img_bytes))
-        source_img = cv2.cvtColor(np.array(source_img), cv2.COLOR_RGB2BGR)
-        target_img = cv2.cvtColor(np.array(target_img), cv2.COLOR_RGB2BGR)
-        source_face = get_face_single(source_img, face_index=0)
-        if source_face is not None:
-            result = target_img
-            model_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), model)
-            face_swapper = getFaceSwapModel(model_path)
+    return_result = ImageResult(target_img, {}, {})
+    target_img = cv2.cvtColor(np.array(target_img), cv2.COLOR_RGB2BGR)
+    gender = source_face["gender"]
+    print("Source Gender ", gender)
+    if source_face is not None:
+        result = target_img
+        model_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), model)
+        face_swapper = getFaceSwapModel(model_path)
+        target_faces = get_faces(target_img)
+        print("Target faces count", len(target_faces))
 
-            for face_num in faces_index:
-                target_face = get_face_single(target_img, face_index=face_num)
-                if target_face is not None:
-                    result = face_swapper.get(result, target_face, source_face)
-                else:
-                    logger.info(f"No target face found for {face_num}")
+        if same_gender:
+            target_faces = [x for x in target_faces if x["gender"] == gender]
+            print("Target Gender Matches count", len(target_faces))
 
-            result_image = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
-            if upscale_options is not None:
-                result_image = upscale_image(result_image, upscale_options)
-        else:
-            logger.info("No source face found")
-    result_image.save(fn.name)
-    return ImageResult(path=fn.name)
+        for i, swapped_face in enumerate(target_faces):
+            logger.info(f"swap face {i}")
+            if i in faces_index:
+                result = face_swapper.get(result, swapped_face, source_face)
+
+        result_image = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+        return_result.image = result_image
+
+        try:
+            result_faces = get_faces(
+                cv2.cvtColor(np.array(result_image), cv2.COLOR_RGB2BGR)
+            )
+            if same_gender:
+                result_faces = [x for x in result_faces if x["gender"] == gender]
+
+            for i, swapped_face in enumerate(result_faces):
+                logger.info(f"compare face {i}")
+                if i in faces_index and i < len(target_faces):
+                    return_result.similarity[i] = cosine_similarity_face(
+                        source_face, swapped_face
+                    )
+                    return_result.ref_similarity[i] = cosine_similarity_face(
+                        reference_face, swapped_face
+                    )
+
+                print("similarity", return_result.similarity)
+                print("ref similarity", return_result.ref_similarity)
+
+        except Exception as e:
+            logger.error(str(e))
+
+    return return_result
