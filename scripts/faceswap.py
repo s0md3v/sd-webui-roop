@@ -462,7 +462,9 @@ class FaceSwapScript(scripts.Script):
                 infos = [None] * len(images)
             for i, (img, info) in enumerate(zip(images, infos)):
                 if convert_to_sd(img) :
-                    return(images,infos)
+                    result_infos.append(info)
+                    result_images.append(img)
+                    continue
                 if not unit.blend_faces :
                     src_faces = unit.faces
                     logger.info(f"will generate {len(src_faces)} images")

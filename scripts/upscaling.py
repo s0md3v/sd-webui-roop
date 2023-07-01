@@ -5,8 +5,11 @@ from typing import List, Union, Dict, Set, Tuple
 from scripts.roop_logging import logger
 from PIL import Image
 import numpy as np
-from modules import scripts, shared
-
+from scripts import swapper, imgutils
+from modules import scripts, shared, processing
+from modules.processing import (Processed, StableDiffusionProcessing,
+                                StableDiffusionProcessingImg2Img,
+                                StableDiffusionProcessingTxt2Img)
 
 @dataclass
 class UpscaleOptions:
@@ -63,3 +66,14 @@ def upscale_image(image: Image.Image, upscale_options: UpscaleOptions):
         logger.info("Failed to upscale %s", e)
 
     return result_image
+
+def img2img_diffusion(img, prompt) :
+    faces = swapper.get_faces(imgutils.pil_to_cv2(img))
+    if faces:
+        for face in faces:
+            bbox = face.bbox.astype(int)
+            x_min, y_min, x_max, y_max = bbox
+            face_image = img.crop((x_min, y_min, x_max, y_max))
+            i2i_p = StableDiffusionProcessingImg2Img([face_image], width = img.width, height = img.height, prompt = prompt, denoising_strength=0.1)
+            i2i_processed = processing.process_images(i2i_p)
+            return i2i_processed.images
