@@ -16,6 +16,7 @@ class UpscaleOptions:
     scale: int = 1
     upscale_visibility: float = 0.5
 
+
     @property
     def upscaler(self) -> UpscalerData:
         for upscaler in shared.sd_upscalers:

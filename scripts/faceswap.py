@@ -1,5 +1,13 @@
 import glob
 import importlib
+from scripts import swapper, roop_logging, roop_version, cimage, imgutils, upscaling
+importlib.reload(swapper)
+importlib.reload(roop_logging)
+importlib.reload(roop_version)
+importlib.reload(cimage)
+importlib.reload(imgutils)
+importlib.reload(upscaling)
+
 import json
 import os
 from dataclasses import dataclass, fields
@@ -15,7 +23,7 @@ import onnx
 import pandas as pd
 import torch
 from insightface.app.common import Face
-from modules import script_callbacks, scripts, shared
+from modules import script_callbacks, scripts, shared, processing
 from modules.face_restoration import FaceRestoration
 from modules.images import save_image
 from modules.processing import (Processed, StableDiffusionProcessing,
@@ -26,7 +34,6 @@ from modules.upscaler import Upscaler, UpscalerData
 from onnx import numpy_helper
 from PIL import Image
 
-import scripts.swapper as swapper
 from scripts.roop_logging import logger
 from scripts.roop_version import version_flag
 from scripts.imgutils import (create_square_image, cv2_to_pil, pil_to_cv2,
@@ -425,24 +432,24 @@ class FaceSwapScript(scripts.Script):
             self.units += [FaceSwapUnitSettings.get_unit_configuration(i, components)]
 
         for i, u in enumerate(self.units):
-            print(i, u)
+            logger.debug("%s, %s", pformat(i), pformat(u))
 
         len_conf: int = len(fields(FaceSwapUnitSettings))
         shift: int = self.units_count * len_conf
         self.upscale_options = UpscaleOptions(
             *components[shift : shift + len(fields(UpscaleOptions))]
         )
-        print(self.upscale_options)
+        logger.debug("%s", pformat(self.upscale_options))
         self.model = components[-1]
         self.show_unmodified = components[-2]
 
         if isinstance(p, StableDiffusionProcessingImg2Img):
             if any([u.enable for u in self.units]):
                 init_images = p.init_images
-                for unit in self.units:
+                for i, unit in enumerate(self.units):
                     if unit.enable and unit.swap_in_source :
                         (init_images, result_infos) = self.process_images_unit(unit, init_images)
-                        logger.info(f"processed init image: {len(init_images)}, {len(result_infos)}")
+                        logger.info(f"unit {i+1}> processed init images: {len(init_images)}, {len(result_infos)}")
 
                 p.init_images = init_images
 
@@ -455,7 +462,8 @@ class FaceSwapScript(scripts.Script):
                 infos = [None] * len(images)
             for i, (img, info) in enumerate(zip(images, infos)):
                 if convert_to_sd(img) :
-                    return(images,infos)
+                    pass
+                    #return(images,infos)
                 if not unit.blend_faces :
                     src_faces = unit.faces
                     logger.info(f"will generate {len(src_faces)} images")
@@ -491,10 +499,10 @@ class FaceSwapScript(scripts.Script):
         if any([u.enable for u in self.units]):
             result_images = processed.images[:]
             result_infos = processed.infotexts
-            for unit in self.units:
+            for i, unit in enumerate(self.units):
                 if unit.enable and unit.swap_in_generated :
                     (result_images, result_infos) = self.process_images_unit(unit, result_images, result_infos, processed)
-                    logger.info(f"processed : {len(result_images)}, {len(result_infos)}")
+                    logger.info(f"unit {i+1}> processed : {len(result_images)}, {len(result_infos)}")
 
             for i, img in enumerate(result_images):
                 if self.upscale_options is not None:
@@ -509,4 +517,17 @@ class FaceSwapScript(scripts.Script):
             if self.show_unmodified:
                 processed.images += orig_images
                 processed.infotexts+= orig_infos
+
+            # new_images = []
+            # for img in processed.images:
+            #     faces = swapper.get_faces(pil_to_cv2(img))
+            #     if faces:
+            #         for face in faces:
+            #             bbox = face.bbox.astype(int)
+            #             x_min, y_min, x_max, y_max = bbox
+            #             face_image = img.crop((x_min, y_min, x_max, y_max))
+            #             i2i_p = StableDiffusionProcessingImg2Img([face_image], width = img.width, height = img.height, prompt = p.prompt, denoising_strength=0.1)
+            #             i2i_processed = processing.process_images(i2i_p)
+            #             new_images += i2i_processed.images
+            # processed.images += new_images
 

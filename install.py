@@ -36,7 +36,7 @@ with open(req_file) as file:
             python = sys.executable
             package = package.strip()
 
-            if not launch.is_installed(package):
+            if not launch.is_installed(package.split("==")[0]):
                 print(f"Install {package}")
                 launch.run_pip(
                     f"install {package}", f"sd-webui-roop requirement: {package}"
