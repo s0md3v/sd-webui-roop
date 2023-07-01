@@ -462,8 +462,7 @@ class FaceSwapScript(scripts.Script):
                 infos = [None] * len(images)
             for i, (img, info) in enumerate(zip(images, infos)):
                 if convert_to_sd(img) :
-                    pass
-                    #return(images,infos)
+                    return(images,infos)
                 if not unit.blend_faces :
                     src_faces = unit.faces
                     logger.info(f"will generate {len(src_faces)} images")
@@ -518,16 +517,4 @@ class FaceSwapScript(scripts.Script):
                 processed.images += orig_images
                 processed.infotexts+= orig_infos
 
-            # new_images = []
-            # for img in processed.images:
-            #     faces = swapper.get_faces(pil_to_cv2(img))
-            #     if faces:
-            #         for face in faces:
-            #             bbox = face.bbox.astype(int)
-            #             x_min, y_min, x_max, y_max = bbox
-            #             face_image = img.crop((x_min, y_min, x_max, y_max))
-            #             i2i_p = StableDiffusionProcessingImg2Img([face_image], width = img.width, height = img.height, prompt = p.prompt, denoising_strength=0.1)
-            #             i2i_processed = processing.process_images(i2i_p)
-            #             new_images += i2i_processed.images
-            # processed.images += new_images
 
