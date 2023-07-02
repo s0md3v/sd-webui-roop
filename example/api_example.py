@@ -33,7 +33,7 @@ args=[
 # The args for roop can be found by 
 # requests.get(url=f'{address}/sdapi/v1/script-info')
 
-prompt = "(8k, best quality, masterpiece, ultra highres:1.2),Realistic image style,Vertical orientation, Man wearing suit"
+prompt = "(8k, best quality, masterpiece, ultra highres:1.2),Realistic image style,Vertical orientation, Man wearing suit, Einstein"
 neg = "ng_deepnegative_v1_75t, (worst quality:2), (low quality:2), (normal quality:2), lowres, bad anatomy, normal quality, ((monochrome)), ((grayscale)), (verybadimagenegative_v1.3:0.8), negative_hand-neg, (lamp), badhandv4"
 payload = {
     "prompt": prompt,

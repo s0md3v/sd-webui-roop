@@ -1,6 +1,9 @@
 import glob
 import importlib
-from scripts import swapper, roop_logging, roop_version, cimage, imgutils, upscaling
+
+from scripts import (cimage, imgutils, roop_logging, roop_version, swapper,
+                     upscaling)
+
 #Reload all the modules when using "apply and restart"
 importlib.reload(swapper)
 importlib.reload(roop_logging)
@@ -9,13 +12,15 @@ importlib.reload(cimage)
 importlib.reload(imgutils)
 importlib.reload(upscaling)
 
-import base64, io
+import base64
+import io
 import json
 import os
+import tempfile
 from dataclasses import dataclass, fields
 from pprint import pformat, pprint
 from typing import Dict, List, Set, Tuple, Union
-from scripts.cimage import convert_to_sd
+
 import cv2
 import dill as pickle
 import gradio as gr
@@ -25,7 +30,7 @@ import onnx
 import pandas as pd
 import torch
 from insightface.app.common import Face
-from modules import script_callbacks, scripts, shared, processing
+from modules import processing, script_callbacks, scripts, shared
 from modules.face_restoration import FaceRestoration
 from modules.images import save_image
 from modules.processing import (Processed, StableDiffusionProcessing,
@@ -36,26 +41,48 @@ from modules.upscaler import Upscaler, UpscalerData
 from onnx import numpy_helper
 from PIL import Image
 
-from scripts.roop_logging import logger
-from scripts.roop_version import version_flag
+from scripts.cimage import convert_to_sd
 from scripts.imgutils import (create_square_image, cv2_to_pil, pil_to_cv2,
                               pil_to_torch, torch_to_pil)
+from scripts.roop_logging import logger
+from scripts.roop_version import version_flag
 from scripts.upscaling import UpscaleOptions, upscale_image
 
 EXTENSION_PATH=os.path.join("extensions","sd-webui-roop")
 
 def get_models():
-    models_path = os.path.join(
-        scripts.basedir(), EXTENSION_PATH,"models","*"
-    )
+    """
+    Retrieve a list of swap model files.
+
+    This function searches for model files in the specified directories and returns a list of file paths.
+    The supported file extensions are ".onnx".
+
+    Returns:
+        A list of file paths of the model files.
+    """
+    models_path = os.path.join(scripts.basedir(), EXTENSION_PATH, "models", "*")
     models = glob.glob(models_path)
+
+    # Add an additional models directory and find files in it
     models_path = os.path.join(scripts.basedir(), "models", "roop", "*")
     models += glob.glob(models_path)
-    models = [x for x in models if x.endswith(".onnx") or x.endswith(".pth")]
+
+    # Filter the list to include only files with the supported extensions
+    models = [x for x in models if x.endswith(".onnx")]
+
     return models
 
-def get_faces():
-    faces_path = os.path.join(scripts.basedir(), "models", "roop", "faces","*.pkl")
+def get_face_checkpoints():
+    """
+    Retrieve a list of face checkpoint paths.
+
+    This function searches for face files with the extension ".pkl" in the specified directory and returns a list
+    containing the paths of those files.
+
+    Returns:
+        list: A list of face paths, including the string "None" as the first element.
+    """
+    faces_path = os.path.join(scripts.basedir(), "models", "roop", "faces", "*.pkl")
     faces = glob.glob(faces_path)
     return ["None"] + faces
 
@@ -174,7 +201,8 @@ def compare(img1, img2):
 
     return "You need 2 images to compare"
 
-import tempfile
+
+
 def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibility,upscaler_name,upscaler_scale, upscaler_visibility):
     if not extract_path :
         tempfile.mkdtemp()
@@ -201,7 +229,17 @@ def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibi
 
 
 
-def save(batch_files, name):
+def build_face_checkpoint_and_save(batch_files, name):
+    """
+    Builds a face checkpoint, swaps faces, and saves the result to a file.
+
+    Args:
+        batch_files (list): List of image file paths.
+        name (str): Name of the face checkpoint
+
+    Returns:
+        PIL.Image.Image or None: Resulting swapped face image if successful, otherwise None.
+    """
     batch_files = batch_files or []
     print("Build", name, [x.name for x in batch_files])
     faces = swapper.get_faces_from_img_files(batch_files)
@@ -247,7 +285,7 @@ def save(batch_files, name):
 
 
 
-def explore(model_path):
+def explore_onnx_faceswap_model(model_path):
     data = {
         'Node Name': [],
         'Op Type': [],
@@ -350,9 +388,9 @@ def tools_ui():
             )
         upscale_options = upscaler_ui()
 
-    explore_btn.click(explore, inputs=[model], outputs=[explore_result_text])  
+    explore_btn.click(explore_onnx_faceswap_model, inputs=[model], outputs=[explore_result_text])  
     compare_btn.click(compare, inputs=[img1, img2], outputs=[compare_result_text])
-    generate_checkpoint_btn.click(save, inputs=[batch_files, name], outputs=[preview])
+    generate_checkpoint_btn.click(build_face_checkpoint_and_save, inputs=[batch_files, name], outputs=[preview])
     extract_btn.click(extract_faces, inputs=[extracted_source_files, extract_save_path]+upscale_options, outputs=[extracted_faces])  
 
 def on_ui_tabs() :
@@ -384,12 +422,12 @@ class FaceSwapScript(scripts.Script):
                     )
                 with gr.Row() :
                     face = gr.inputs.Dropdown(
-                        choices=get_faces(),
-                        label="Face Checkpoint",
+                        choices=get_face_checkpoints(),
+                        label="Face Checkpoint (precedence over reference face)",
                     )
                     refresh = gr.Button(value='↻', variant='tool')
                     def refresh_fn(selected):
-                        return gr.Dropdown.update(value=selected, choices=get_faces())
+                        return gr.Dropdown.update(value=selected, choices=get_face_checkpoints())
                     refresh.click(fn=refresh_fn,inputs=face, outputs=face)
 
                 with gr.Row():
@@ -495,7 +533,7 @@ class FaceSwapScript(scripts.Script):
                 p.init_images = init_images
 
 
-    def process_images_unit(self, unit, images, infos = None, processed = None)  :
+    def process_images_unit(self, unit, images, infos = None)  :
         if unit.enable :
             result_images = []
             result_infos = []
@@ -512,47 +550,57 @@ class FaceSwapScript(scripts.Script):
                 else :
                     logger.info("blend all faces together")
                     src_faces = [unit.blended_faces]
-                if not processed or img.width == processed.width and img.height == processed.height :
-                    for i,src_face in enumerate(src_faces):
-                        logger.info(f"Process face {i}")
-                        result: swapper.ImageResult = swapper.swap_face(
-                            unit.reference_face if unit.reference_face is not None else src_face,
-                            src_face,
-                            img,
-                            faces_index=unit.faces_index,
-                            model=self.model,
-                            same_gender=unit.same_gender,
+                for i,src_face in enumerate(src_faces):
+                    logger.info(f"Process face {i}")
+                    result: swapper.ImageResult = swapper.swap_face(
+                        unit.reference_face if unit.reference_face is not None else src_face,
+                        src_face,
+                        img,
+                        faces_index=unit.faces_index,
+                        model=self.model,
+                        same_gender=unit.same_gender,
+                    )
+                    if result.similarity and all([result.similarity.values()!=0]+[x >= unit.min_sim for x in result.similarity.values()]) and all([result.ref_similarity.values()!=0]+[x >= unit.min_ref_sim for x in result.ref_similarity.values()]):
+                        result_infos.append(f"{info}, similarity = {result.similarity}, ref_similarity = {result.ref_similarity}")
+                        result_images.append(result.image)
+                    else:
+                        logger.info(
+                            f"skip, similarity to low, sim = {result.similarity} (target {unit.min_sim}) ref sim = {result.ref_similarity} (target = {unit.min_ref_sim})"
                         )
-                        if result.similarity and all([result.similarity.values()!=0]+[x >= unit.min_sim for x in result.similarity.values()]) and all([result.ref_similarity.values()!=0]+[x >= unit.min_ref_sim for x in result.ref_similarity.values()]):
-                            result_infos.append(f"{info}, similarity = {result.similarity}, ref_similarity = {result.ref_similarity}")
-                            result_images.append(result.image)
-                        else:
-                            logger.info(
-                                f"skip, similarity to low, sim = {result.similarity} (target {unit.min_sim}) ref sim = {result.ref_similarity} (target = {unit.min_ref_sim})"
-                            )
             logger.info(f"{len(result_images)} images processed")
             return (result_images, result_infos)
         return (images, infos)
 
-    def postprocess(self, p, processed: Processed, *args):
+    def postprocess(self, p : StableDiffusionProcessing, processed: Processed, *args):
         orig_images = processed.images
         orig_infos = processed.infotexts
 
         if any([u.enable for u in self.units]):
             result_images = processed.images[:]
-            result_infos = processed.infotexts
+            result_infos = processed.infotexts[:]
+            if p.batch_size > 1 :
+                # Remove grid image if batch size is greater than 1 :
+                result_images = result_images[1:]
+                result_infos = result_infos[1:]
+                logger.info("Discard grid image from swapping process. This could induce bugs with some extensions.")
+
             for i, unit in enumerate(self.units):
                 if unit.enable and unit.swap_in_generated :
-                    (result_images, result_infos) = self.process_images_unit(unit, result_images, result_infos, processed)
+                    (result_images, result_infos) = self.process_images_unit(unit, result_images, result_infos)
                     logger.info(f"unit {i+1}> processed : {len(result_images)}, {len(result_infos)}")
 
             for i, img in enumerate(result_images):
                 if self.upscale_options is not None:
                     result_images[i] = upscale_image(img, self.upscale_options)
-
+                if p.outpath_samples :
+                    save_image(result_images[i], p.outpath_samples, "swapped")
+                           
             if len(result_images) > 1:
-                result_images.append(create_square_image(result_images))
-
+                try :
+                    # prepend swapped grid to result_images :
+                    result_images = [create_square_image(result_images)] + result_images
+                except Exception as e :
+                    logger.error("Error building result grid %s", e)
             processed.images = result_images
             processed.infotexts = result_infos
             
