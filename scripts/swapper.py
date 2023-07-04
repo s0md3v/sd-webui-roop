@@ -75,6 +75,9 @@ def compare_faces(img1: Image.Image, img2: Image.Image) -> float:
 ANALYSIS_MODEL = None
 
 
+class FaceModelException(Exception):
+    pass
+
 def getAnalysisModel():
     """
     Retrieves the analysis model for face analysis.
@@ -86,12 +89,15 @@ def getAnalysisModel():
     
     # Check if the analysis model has been initialized
     if ANALYSIS_MODEL is None:
-        logger.info("Load analysis model, will take some time.")
-        # Initialize the analysis model with the specified name and providers
-        ANALYSIS_MODEL = insightface.app.FaceAnalysis(
-            name="buffalo_l", providers=providers
-        )
-    
+        try :
+            logger.info("Load analysis model, will take some time.")
+            # Initialize the analysis model with the specified name and providers
+            ANALYSIS_MODEL = insightface.app.FaceAnalysis(
+                name="buffalo_l", providers=providers
+            )
+        except Exception as e :
+            logger.error("Loading of swapping model failed, please check the requirements (On Windows, download and install Visual Studio. During the install, make sure to include the Python and C++ packages.)")
+            raise FaceModelException()
     # Return the analysis model
     return ANALYSIS_MODEL
 
@@ -114,10 +120,13 @@ def getFaceSwapModel(model_path: str):
 
     # Check if the current model path is different from the new model path.
     if CURRENT_FS_MODEL_PATH is None or CURRENT_FS_MODEL_PATH != model_path:
-        CURRENT_FS_MODEL_PATH = model_path
-        # Initializes the face swap model using the specified model path.
-        FS_MODEL = insightface.model_zoo.get_model(model_path, providers=providers)
-
+        logger.info("Load swapping model, will take some time.")
+        try :
+            CURRENT_FS_MODEL_PATH = model_path
+            # Initializes the face swap model using the specified model path.
+            FS_MODEL = insightface.model_zoo.get_model(model_path, providers=providers)
+        except Exception as e :
+            logger.error("Loading of swapping model failed, please check the requirements (On Windows, download and install Visual Studio. During the install, make sure to include the Python and C++ packages.)")
     return FS_MODEL
 
 
@@ -282,49 +291,51 @@ def swap_face(
 
     """    
     return_result = ImageResult(target_img, {}, {})
-    target_img = cv2.cvtColor(np.array(target_img), cv2.COLOR_RGB2BGR)
-    gender = source_face["gender"]
-    logger.info("Source Gender %s", gender)
-    if source_face is not None:
-        result = target_img
-        model_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), model)
-        face_swapper = getFaceSwapModel(model_path)
-        target_faces = get_faces(target_img)
-        logger.info("Target faces count : %s", len(target_faces))
+    try :
+        target_img = cv2.cvtColor(np.array(target_img), cv2.COLOR_RGB2BGR)
+        gender = source_face["gender"]
+        logger.info("Source Gender %s", gender)
+        if source_face is not None:
+            result = target_img
+            model_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), model)
+            face_swapper = getFaceSwapModel(model_path)
+            target_faces = get_faces(target_img)
+            logger.info("Target faces count : %s", len(target_faces))
 
-        if same_gender:
-            target_faces = [x for x in target_faces if x["gender"] == gender]
-            logger.info("Target Gender Matches count %s", len(target_faces))
-
-        for i, swapped_face in enumerate(target_faces):
-            logger.info(f"swap face {i}")
-            if i in faces_index:
-                result = face_swapper.get(result, swapped_face, source_face)
-
-        result_image = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
-        return_result.image = result_image
-
-        try:
-            result_faces = get_faces(
-                cv2.cvtColor(np.array(result_image), cv2.COLOR_RGB2BGR)
-            )
             if same_gender:
-                result_faces = [x for x in result_faces if x["gender"] == gender]
+                target_faces = [x for x in target_faces if x["gender"] == gender]
+                logger.info("Target Gender Matches count %s", len(target_faces))
 
-            for i, swapped_face in enumerate(result_faces):
-                logger.info(f"compare face {i}")
-                if i in faces_index and i < len(target_faces):
-                    return_result.similarity[i] = cosine_similarity_face(
-                        source_face, swapped_face
-                    )
-                    return_result.ref_similarity[i] = cosine_similarity_face(
-                        reference_face, swapped_face
-                    )
+            for i, swapped_face in enumerate(target_faces):
+                logger.info(f"swap face {i}")
+                if i in faces_index:
+                    result = face_swapper.get(result, swapped_face, source_face)
 
-                logger.info(f"similarity {return_result.similarity}")
-                logger.info(f"ref similarity {return_result.ref_similarity}")
+            result_image = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+            return_result.image = result_image
 
-        except Exception as e:
-            logger.error(str(e))
+            try:
+                result_faces = get_faces(
+                    cv2.cvtColor(np.array(result_image), cv2.COLOR_RGB2BGR)
+                )
+                if same_gender:
+                    result_faces = [x for x in result_faces if x["gender"] == gender]
 
+                for i, swapped_face in enumerate(result_faces):
+                    logger.info(f"compare face {i}")
+                    if i in faces_index and i < len(target_faces):
+                        return_result.similarity[i] = cosine_similarity_face(
+                            source_face, swapped_face
+                        )
+                        return_result.ref_similarity[i] = cosine_similarity_face(
+                            reference_face, swapped_face
+                        )
+
+                    logger.info(f"similarity {return_result.similarity}")
+                    logger.info(f"ref similarity {return_result.ref_similarity}")
+
+            except Exception as e:
+                logger.error("Swapping failed %s", e)
+    except Exception as e :
+        logger.error("Conversion failed %s", e)
     return return_result

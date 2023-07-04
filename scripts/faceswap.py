@@ -311,7 +311,9 @@ def explore_onnx_faceswap_model(model_path):
     return df
 
 def upscaler_ui():
-    with gr.Tab(f"Upscaler"):
+    with gr.Tab(f"Enhancements"):
+        gr.Markdown(
+                """Upscaling is performed on the whole image. Upscaling happens before face restoration.""")
         with gr.Row():
             face_restorer_name = gr.Radio(
                 label="Restore Face",
@@ -330,18 +332,36 @@ def upscaler_ui():
         upscaler_visibility = gr.Slider(
             0, 1, 1, step=0.1, label="Upscaler visibility (if scale = 1)"
         )
+        with gr.Accordion(f"Post Inpainting (Beta)", open=True):
+            gr.Markdown(
+                """Inpainting sends image to inpainting with a mask on face (once for each faces). This is done before upscaling and face restoration.""")
+            inpainting_denoising_strength = gr.Slider(
+                0, 1, 0, step=0.01, label="Denoising strenght (will send face to img2img after processing)"
+            )
+
+            inpainting_denoising_prompt = gr.Textbox("Portrait of a [gender]", label="Inpainting prompt use [gender] instead of men or woman")
+            inpainting_denoising_negative_prompt = gr.Textbox("", label="Inpainting negative prompt use [gender] instead of men or woman")
+            inpainting_denoising_steps =  gr.Slider(
+                1, 150, 20, step=1, label="Inpainting steps)"
+            )
     return [
         face_restorer_name,
         face_restorer_visibility,
         upscaler_name,
         upscaler_scale,
         upscaler_visibility,
+        inpainting_denoising_strength,
+        inpainting_denoising_prompt,
+        inpainting_denoising_negative_prompt,
+        inpainting_denoising_steps
     ]
 
 def tools_ui():
     models = get_models()
     with gr.Tab("Tools"):
         with gr.Tab("Build"):
+            gr.Markdown(
+                """Build a face based on a batch list of images. Will blend the resulting face and store the checkpoint in the roop/faces directory.""")
             with gr.Row():
                 batch_files = gr.components.File(
                     type="file",
@@ -357,6 +377,9 @@ def tools_ui():
             )
             generate_checkpoint_btn = gr.Button("Save")
         with gr.Tab("Compare"):
+            gr.Markdown(
+                """Give a similarity score between two images (only first face is compared).""")
+ 
             with gr.Row():
                 img1 = gr.components.Image(type="pil", label="Face 1")
                 img2 = gr.components.Image(type="pil", label="Face 2")
@@ -365,6 +388,8 @@ def tools_ui():
                 interactive=False, label="Similarity", value="0"
             )
         with gr.Tab("Extract"):
+            gr.Markdown(
+                """Extract all faces from a batch of images. Will apply enhancement in the tools enhancement tab.""")
             with gr.Row():
                 extracted_source_files = gr.components.File(
                     type="file",
@@ -412,6 +437,9 @@ class FaceSwapScript(scripts.Script):
     def faceswap_unit_ui(self, is_img2img, unit_num=1):
         with gr.Tab(f"Face {unit_num}"):
             with gr.Column():
+                gr.Markdown(
+                """Reference is an image. First face will be extracted. 
+                First face of batches sources will be extracted and used as input (or blended if blend is activated).""")
                 with gr.Row():
                     img = gr.components.Image(type="pil", label="Reference")
                     batch_files = gr.components.File(
@@ -420,7 +448,10 @@ class FaceSwapScript(scripts.Script):
                         label="Batch Sources Images",
                         optional=True,
                     )
+                gr.Markdown(
+                    """Face checkpoint built with the checkpoint builder in tools. Will overwrite reference image.""")     
                 with gr.Row() :
+               
                     face = gr.inputs.Dropdown(
                         choices=get_face_checkpoints(),
                         label="Face Checkpoint (precedence over reference face)",
@@ -438,6 +469,7 @@ class FaceSwapScript(scripts.Script):
                     blend_faces = gr.Checkbox(
                         True, placeholder="Blend Faces", label="Blend Faces ((Source|Checkpoint)+References = 1)"
                     )
+                gr.Markdown("""Discard images with low similarity or no faces :""")        
                 min_sim = gr.Slider(0, 1, 0, step=0.01, label="Min similarity")
                 min_ref_sim = gr.Slider(
                     0, 1, 0, step=0.01, label="Min reference similarity"
@@ -447,6 +479,7 @@ class FaceSwapScript(scripts.Script):
                     placeholder="Which face to swap (comma separated), start from 0 (by gender if same_gender is enabled)",
                     label="Comma separated face number(s)",
                 )
+                gr.Markdown("""Configure swapping. Swapping can occure before img2img, after or both :""", visible=is_img2img)        
                 swap_in_source = gr.Checkbox(
                     False,
                     placeholder="Swap face in source image",
@@ -564,7 +597,7 @@ class FaceSwapScript(scripts.Script):
                         result_infos.append(f"{info}, similarity = {result.similarity}, ref_similarity = {result.ref_similarity}")
                         result_images.append(result.image)
                     else:
-                        logger.info(
+                        logger.warning(
                             f"skip, similarity to low, sim = {result.similarity} (target {unit.min_sim}) ref sim = {result.ref_similarity} (target = {unit.min_ref_sim})"
                         )
             logger.info(f"{len(result_images)} images processed")
@@ -593,8 +626,7 @@ class FaceSwapScript(scripts.Script):
                 if self.upscale_options is not None:
                     result_images[i] = upscale_image(img, self.upscale_options)
                 if p.outpath_samples :
-                    save_image(result_images[i], p.outpath_samples, "swapped")
-                           
+                    save_image(result_images[i], p.outpath_samples, seed=int(p.seed), info=result_infos[i], basename="swapped")                           
             if len(result_images) > 1:
                 try :
                     # prepend swapped grid to result_images :
