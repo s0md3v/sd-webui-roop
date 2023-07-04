@@ -6,6 +6,7 @@ from scripts import imgutils
 from scripts.roop_logging import logger
 from PIL import Image
 import numpy as np
+from modules import shared
 from scripts import swapper, imgutils
 from modules import scripts, shared, processing
 from modules.processing import (Processed, StableDiffusionProcessing,
@@ -134,10 +135,9 @@ def img2img_diffusion(img : Image.Image, inpainting_prompt : str, inpainting_den
                 mask = create_mask(img, bbox)
                 prompt = inpainting_prompt.replace("[gender]", "man" if face["gender"] == 1 else "woman")
                 negative_prompt = inpainting_negative_prompt.replace("[gender]", "man" if face["gender"] == 1 else "woman")
-
                 logger.info("Denoising prompt : %s", prompt)
                 logger.info("Denoising strenght : %s", inpainting_denoising_strength)
-                i2i_p = StableDiffusionProcessingImg2Img([img], steps =inpainting_steps, width = img.width, inpainting_fill=1, inpaint_full_res= True, height = img.height, mask=mask, prompt = prompt,negative_prompt=negative_prompt, denoising_strength=inpainting_denoising_strength)
+                i2i_p = StableDiffusionProcessingImg2Img([img],do_not_save_samples=True, steps =inpainting_steps, width = img.width, inpainting_fill=1, inpaint_full_res= True, height = img.height, mask=mask, prompt = prompt,negative_prompt=negative_prompt, denoising_strength=inpainting_denoising_strength)
                 i2i_processed = processing.process_images(i2i_p)
                 images = i2i_processed.images
                 if len(images) > 0 :

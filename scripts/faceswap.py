@@ -203,7 +203,7 @@ def compare(img1, img2):
 
 
 
-def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibility,upscaler_name,upscaler_scale, upscaler_visibility):
+def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibility,upscaler_name,upscaler_scale, upscaler_visibility,inpainting_denoising_strengh, inpainting_prompt, inpainting_negative_prompt, inpainting_steps):
     if not extract_path :
         tempfile.mkdtemp()
     if files is not None:
@@ -219,7 +219,15 @@ def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibi
                     face_image = img.crop((x_min, y_min, x_max, y_max))
                     if face_restorer_name or face_restorer_visibility:
                         scale = 1 if face_image.width > 512 else 512//face_image.width
-                        face_image = upscale_image(face_image, UpscaleOptions(face_restorer_name=face_restorer_name, restorer_visibility=face_restorer_visibility, upscaler_name=upscaler_name, upscale_visibility=upscaler_visibility, scale=scale))
+                        face_image = upscale_image(face_image, UpscaleOptions(face_restorer_name=face_restorer_name,
+                                                                            restorer_visibility=face_restorer_visibility,
+                                                                            upscaler_name=upscaler_name, 
+                                                                            upscale_visibility=upscaler_visibility, 
+                                                                            scale=scale,
+                                                                            inpainting_denoising_strengh=inpainting_denoising_strengh,
+                                                                            inpainting_prompt=inpainting_prompt,
+                                                                            inpainting_steps=inpainting_steps,
+                                                                            inpainting_negative_prompt=inpainting_negative_prompt))
                     path = tempfile.NamedTemporaryFile(delete=False,suffix=".png",dir=extract_path).name
                     face_image.save(path)
                     face_images.append(path)
@@ -421,7 +429,7 @@ def tools_ui():
 def on_ui_tabs() :
     with gr.Blocks(analytics_enabled=False) as ui_faceswap:
         tools_ui()
-    return [(ui_faceswap, "FaceTools", "roop_tab")] 
+    return [(ui_faceswap, "Roop", "roop_tab")] 
 
 script_callbacks.on_ui_tabs(on_ui_tabs)
 
@@ -535,7 +543,7 @@ class FaceSwapScript(scripts.Script):
                 components += self.faceswap_unit_ui(is_img2img, i)
             upscaler = upscaler_ui()
             configuration = self.configuration_ui(is_img2img)
-            tools_ui()
+            #tools_ui() #disable tools in accordion
         return components + upscaler + configuration
 
     def process(self, p: StableDiffusionProcessing, *components):
@@ -625,7 +633,7 @@ class FaceSwapScript(scripts.Script):
             for i, img in enumerate(result_images):
                 if self.upscale_options is not None:
                     result_images[i] = upscale_image(img, self.upscale_options)
-                if p.outpath_samples :
+                if p.outpath_samples and opts.samples_save :
                     save_image(result_images[i], p.outpath_samples, seed=int(p.seed), info=result_infos[i], basename="swapped")                           
             if len(result_images) > 1:
                 try :
