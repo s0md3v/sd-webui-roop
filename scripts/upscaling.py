@@ -14,6 +14,12 @@ from modules.processing import (Processed, StableDiffusionProcessing,
                                 StableDiffusionProcessingTxt2Img)
 import cv2
 
+from enum import Enum
+class InpaintingWhen(Enum):
+    BEFORE_UPSCALING = "Before Upscaling/all"
+    BEFORE_RESTORE_FACE = "After Upscaling/Before Restore Face"
+    AFTER_ALL = "After All"
+
 @dataclass
 class UpscaleOptions:
     face_restorer_name: str = ""
@@ -26,7 +32,9 @@ class UpscaleOptions:
     inpainting_prompt : str = ""
     inpainting_negative_prompt : str = ""
     inpainting_steps : int = 20
-
+    inpainting_sampler : str = "Euler"
+    inpainting_when : InpaintingWhen = InpaintingWhen.BEFORE_UPSCALING
+    
     @property
     def upscaler(self) -> UpscalerData:
         for upscaler in shared.sd_upscalers:
@@ -45,8 +53,9 @@ class UpscaleOptions:
 def upscale_image(image: Image.Image, upscale_options: UpscaleOptions):
     result_image = image
     try :
-        if upscale_options.inpainting_denoising_strengh > 0 :
+        if upscale_options.inpainting_when == InpaintingWhen.BEFORE_UPSCALING.value :
             result_image = img2img_diffusion(image, 
+                                            inpainting_sampler= upscale_options.inpainting_sampler,
                                             inpainting_prompt=upscale_options.inpainting_prompt, 
                                             inpainting_negative_prompt=upscale_options.inpainting_negative_prompt, 
                                             inpainting_denoising_strength=upscale_options.inpainting_denoising_strengh,
@@ -67,6 +76,14 @@ def upscale_image(image: Image.Image, upscale_options: UpscaleOptions):
                     original_image, result_image, upscale_options.upscale_visibility
                 )
 
+        if upscale_options.inpainting_when == InpaintingWhen.BEFORE_RESTORE_FACE.value :
+            result_image = img2img_diffusion(image, 
+                                            inpainting_sampler= upscale_options.inpainting_sampler,
+                                            inpainting_prompt=upscale_options.inpainting_prompt, 
+                                            inpainting_negative_prompt=upscale_options.inpainting_negative_prompt, 
+                                            inpainting_denoising_strength=upscale_options.inpainting_denoising_strengh,
+                                            inpainting_steps=upscale_options.inpainting_steps)
+
         if upscale_options.face_restorer is not None:
             original_image = result_image.copy()
             logger.info("Restore face with %s", upscale_options.face_restorer.name())
@@ -76,6 +93,14 @@ def upscale_image(image: Image.Image, upscale_options: UpscaleOptions):
             result_image = Image.blend(
                 original_image, restored_image, upscale_options.restorer_visibility
             )
+            
+        if upscale_options.inpainting_when == InpaintingWhen.AFTER_ALL.value :
+            result_image = img2img_diffusion(image, 
+                                            inpainting_sampler= upscale_options.inpainting_sampler,
+                                            inpainting_prompt=upscale_options.inpainting_prompt, 
+                                            inpainting_negative_prompt=upscale_options.inpainting_negative_prompt, 
+                                            inpainting_denoising_strength=upscale_options.inpainting_denoising_strengh,
+                                            inpainting_steps=upscale_options.inpainting_steps)
 
     except Exception as e:
         logger.error("Failed to upscale %s", e)
@@ -124,8 +149,19 @@ def create_mask(image, box_coords):
                 mask.putpixel((x, y), 0)
     return mask
 
-def img2img_diffusion(img : Image.Image, inpainting_prompt : str, inpainting_denoising_strength : float = 0.1, inpainting_negative_prompt : str="", inpainting_steps : int = 20) -> Image.Image :
+def img2img_diffusion(img : Image.Image, inpainting_prompt : str, inpainting_denoising_strength : float = 0.1, inpainting_negative_prompt : str="", inpainting_steps : int = 20, inpainting_sampler : str ="Euler") -> Image.Image :
+    if inpainting_denoising_strength == 0  :
+        return img
+
     try :
+        logger.info(
+f"""Inpainting face
+Sampler : {inpainting_sampler}
+inpainting_denoising_strength : {inpainting_denoising_strength}
+inpainting_steps : {inpainting_steps}
+"""
+)
+        
         logger.info("send faces to image to image")
         img = img.copy()
         faces = swapper.get_faces(imgutils.pil_to_cv2(img))
@@ -136,8 +172,8 @@ def img2img_diffusion(img : Image.Image, inpainting_prompt : str, inpainting_den
                 prompt = inpainting_prompt.replace("[gender]", "man" if face["gender"] == 1 else "woman")
                 negative_prompt = inpainting_negative_prompt.replace("[gender]", "man" if face["gender"] == 1 else "woman")
                 logger.info("Denoising prompt : %s", prompt)
-                logger.info("Denoising strenght : %s", inpainting_denoising_strength)
-                i2i_p = StableDiffusionProcessingImg2Img([img],do_not_save_samples=True, steps =inpainting_steps, width = img.width, inpainting_fill=1, inpaint_full_res= True, height = img.height, mask=mask, prompt = prompt,negative_prompt=negative_prompt, denoising_strength=inpainting_denoising_strength)
+                logger.info("Denoising strenght : %s", inpainting_denoising_strength)                
+                i2i_p = StableDiffusionProcessingImg2Img([img],sampler_name=inpainting_sampler, do_not_save_samples=True, steps =inpainting_steps, width = img.width, inpainting_fill=1, inpaint_full_res= True, height = img.height, mask=mask, prompt = prompt,negative_prompt=negative_prompt, denoising_strength=inpainting_denoising_strength)
                 i2i_processed = processing.process_images(i2i_p)
                 images = i2i_processed.images
                 if len(images) > 0 :

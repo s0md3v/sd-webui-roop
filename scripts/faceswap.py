@@ -48,6 +48,8 @@ from scripts.roop_logging import logger
 from scripts.roop_version import version_flag
 from scripts.upscaling import UpscaleOptions, upscale_image
 
+import modules
+
 EXTENSION_PATH=os.path.join("extensions","sd-webui-roop")
 
 def get_models():
@@ -342,16 +344,25 @@ def upscaler_ui():
         )
         with gr.Accordion(f"Post Inpainting (Beta)", open=True):
             gr.Markdown(
-                """Inpainting sends image to inpainting with a mask on face (once for each faces). This is done before upscaling and face restoration.""")
+                """Inpainting sends image to inpainting with a mask on face (once for each faces).""")
+            inpainting_when = gr.Dropdown(choices = [e.value for e in upscaling.InpaintingWhen.__members__.values()],value=[upscaling.InpaintingWhen.BEFORE_RESTORE_FACE.value], label="When")
             inpainting_denoising_strength = gr.Slider(
                 0, 1, 0, step=0.01, label="Denoising strenght (will send face to img2img after processing)"
             )
 
             inpainting_denoising_prompt = gr.Textbox("Portrait of a [gender]", label="Inpainting prompt use [gender] instead of men or woman")
             inpainting_denoising_negative_prompt = gr.Textbox("", label="Inpainting negative prompt use [gender] instead of men or woman")
-            inpainting_denoising_steps =  gr.Slider(
-                1, 150, 20, step=1, label="Inpainting steps)"
-            )
+            with gr.Row():
+                samplers_names = [s.name for s in modules.sd_samplers.all_samplers]
+                inpainting_sampler = gr.Dropdown(
+                        choices=samplers_names,
+                        value=[samplers_names[0]],
+                        label="Inpainting Sampler",
+                    )
+                inpainting_denoising_steps =  gr.Slider(
+                    1, 150, 20, step=1, label="Inpainting steps"
+                )
+                
     return [
         face_restorer_name,
         face_restorer_visibility,
@@ -361,7 +372,9 @@ def upscaler_ui():
         inpainting_denoising_strength,
         inpainting_denoising_prompt,
         inpainting_denoising_negative_prompt,
-        inpainting_denoising_steps
+        inpainting_denoising_steps,
+        inpainting_sampler,
+        inpainting_when
     ]
 
 def tools_ui():
@@ -433,9 +446,21 @@ def on_ui_tabs() :
 
 script_callbacks.on_ui_tabs(on_ui_tabs)
 
-class FaceSwapScript(scripts.Script):
-    units_count = 3
 
+def on_ui_settings():
+    section = ('roop', "Roop")
+    shared.opts.add_option("roop_units_count", shared.OptionInfo(
+        3, "Max faces units (requires restart)", gr.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
+
+script_callbacks.on_ui_settings(on_ui_settings)
+
+
+class FaceSwapScript(scripts.Script):
+
+    @property
+    def units_count(self) :
+        return opts.data.get("roop_units_count", 3)
+    
     def title(self):
         return f"roop"
 
@@ -619,7 +644,7 @@ class FaceSwapScript(scripts.Script):
         if any([u.enable for u in self.units]):
             result_images = processed.images[:]
             result_infos = processed.infotexts[:]
-            if p.batch_size > 1 :
+            if p.batch_size > 1 and p.n_iter > 1:
                 # Remove grid image if batch size is greater than 1 :
                 result_images = result_images[1:]
                 result_infos = result_infos[1:]
