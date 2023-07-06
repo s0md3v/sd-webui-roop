@@ -115,27 +115,7 @@ def resize_bbox(bbox):
     y_max = int(y_max // 8 + 1) * 8 if y_max % 8 != 0 else y_max
     return x_min, y_min, x_max, y_max
 
-def get_ldsr() -> UpscalerData:
-    for upscaler in shared.sd_upscalers:
-        if upscaler.name == "LDSR":
-            return upscaler
-    return None
-            
-def resize_small_image(img: Image.Image, min_resolution=512, use_ldsr  = True):
-    width, height = img.size
-    if min(width, height) > min_resolution: 
-        return img
-    k = float(min_resolution) / float(min(width, height))
-    target_width = int(round(width * k))
-    target_height = int(round(height * k))
-    if not use_ldsr :
-        resized_img = img.resize((target_width, target_height), resample=Image.Resampling.LANCZOS)
-    else :
-        logger.info("Upscale face with LDSR")
-        resized_img = get_ldsr().scaler.upscale(
-                img, k, get_ldsr().data_path
-        )
-    return resized_img
+
 
 def create_mask(image, box_coords):
     width, height = image.size
@@ -161,7 +141,9 @@ inpainting_denoising_strength : {inpainting_denoising_strength}
 inpainting_steps : {inpainting_steps}
 """
 )
-        
+        if not isinstance(inpainting_sampler, str) :
+            inpainting_sampler = "Euler"
+
         logger.info("send faces to image to image")
         img = img.copy()
         faces = swapper.get_faces(imgutils.pil_to_cv2(img))

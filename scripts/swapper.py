@@ -9,9 +9,11 @@ import insightface
 import numpy as np
 import onnxruntime
 from insightface.app.common import Face
+
 from PIL import Image
 from sklearn.metrics.pairwise import cosine_similarity
 
+from scripts import upscaled_inswapper
 from scripts.imgutils import cv2_to_pil, pil_to_cv2
 from scripts.roop_logging import logger
 
@@ -124,7 +126,7 @@ def getFaceSwapModel(model_path: str):
         try :
             CURRENT_FS_MODEL_PATH = model_path
             # Initializes the face swap model using the specified model path.
-            FS_MODEL = insightface.model_zoo.get_model(model_path, providers=providers)
+            FS_MODEL = upscaled_inswapper.UpscaledINSwapper(insightface.model_zoo.get_model(model_path, providers=providers))
         except Exception as e :
             logger.error("Loading of swapping model failed, please check the requirements (On Windows, download and install Visual Studio. During the install, make sure to include the Python and C++ packages.)")
     return FS_MODEL
@@ -274,6 +276,7 @@ def swap_face(
     model: str,
     faces_index: Set[int] = {0},
     same_gender=True,
+    upscaled_swapper = False
 ) -> ImageResult:
     """
     Swaps faces in the target image with the source face.
@@ -309,7 +312,7 @@ def swap_face(
             for i, swapped_face in enumerate(target_faces):
                 logger.info(f"swap face {i}")
                 if i in faces_index:
-                    result = face_swapper.get(result, swapped_face, source_face)
+                    result = face_swapper.get(result, swapped_face, source_face, upscale = upscaled_swapper)
 
             result_image = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
             return_result.image = result_image

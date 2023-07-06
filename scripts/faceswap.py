@@ -102,6 +102,10 @@ class FaceSwapUnitSettings:
     enable: bool
     # Use same gender filtering
     same_gender: bool
+
+    # If True, discard images with low similarity
+    check_similarity : bool 
+
     # Minimum similarity against the used face (reference, batch or checkpoint)
     min_sim: float
     # Minimum similarity against the reference (reference or checkpoint if checkpoint is given)
@@ -345,7 +349,7 @@ def upscaler_ui():
         with gr.Accordion(f"Post Inpainting (Beta)", open=True):
             gr.Markdown(
                 """Inpainting sends image to inpainting with a mask on face (once for each faces).""")
-            inpainting_when = gr.Dropdown(choices = [e.value for e in upscaling.InpaintingWhen.__members__.values()],value=[upscaling.InpaintingWhen.BEFORE_RESTORE_FACE.value], label="When")
+            inpainting_when = gr.Dropdown(choices = [e.value for e in upscaling.InpaintingWhen.__members__.values()],value=[upscaling.InpaintingWhen.BEFORE_RESTORE_FACE.value], label="Enable/When")
             inpainting_denoising_strength = gr.Slider(
                 0, 1, 0, step=0.01, label="Denoising strenght (will send face to img2img after processing)"
             )
@@ -451,7 +455,8 @@ def on_ui_settings():
     section = ('roop', "Roop")
     shared.opts.add_option("roop_units_count", shared.OptionInfo(
         3, "Max faces units (requires restart)", gr.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
-
+    shared.opts.add_option("roop_upscaled_swapper", shared.OptionInfo(
+        False, "Upscaled swapper", gr.Checkbox, {"interactive": True}, section=section))
 script_callbacks.on_ui_settings(on_ui_settings)
 
 
@@ -461,6 +466,10 @@ class FaceSwapScript(scripts.Script):
     def units_count(self) :
         return opts.data.get("roop_units_count", 3)
     
+    @property
+    def upscaled_swapper(self) :
+        return opts.data.get("roop_upscaled_swapper", False)
+
     def title(self):
         return f"roop"
 
@@ -502,7 +511,8 @@ class FaceSwapScript(scripts.Script):
                     blend_faces = gr.Checkbox(
                         True, placeholder="Blend Faces", label="Blend Faces ((Source|Checkpoint)+References = 1)"
                     )
-                gr.Markdown("""Discard images with low similarity or no faces :""")        
+                gr.Markdown("""Discard images with low similarity or no faces :""")
+                check_similarity = gr.Checkbox(False, placeholder="discard", label="Check similarity")        
                 min_sim = gr.Slider(0, 1, 0, step=0.01, label="Min similarity")
                 min_ref_sim = gr.Slider(
                     0, 1, 0, step=0.01, label="Min reference similarity"
@@ -532,6 +542,7 @@ class FaceSwapScript(scripts.Script):
             blend_faces,
             enable,
             same_gender,
+            check_similarity,
             min_sim,
             min_ref_sim,
             faces_index,
@@ -599,7 +610,7 @@ class FaceSwapScript(scripts.Script):
                 p.init_images = init_images
 
 
-    def process_images_unit(self, unit, images, infos = None)  :
+    def process_images_unit(self, unit : FaceSwapUnitSettings, images, infos = None)  :
         if unit.enable :
             result_images = []
             result_infos = []
@@ -625,8 +636,9 @@ class FaceSwapScript(scripts.Script):
                         faces_index=unit.faces_index,
                         model=self.model,
                         same_gender=unit.same_gender,
+                        upscaled_swapper=self.upscaled_swapper
                     )
-                    if result.similarity and all([result.similarity.values()!=0]+[x >= unit.min_sim for x in result.similarity.values()]) and all([result.ref_similarity.values()!=0]+[x >= unit.min_ref_sim for x in result.ref_similarity.values()]):
+                    if (not unit.check_similarity) or result.similarity and all([result.similarity.values()!=0]+[x >= unit.min_sim for x in result.similarity.values()]) and all([result.ref_similarity.values()!=0]+[x >= unit.min_ref_sim for x in result.ref_similarity.values()]):
                         result_infos.append(f"{info}, similarity = {result.similarity}, ref_similarity = {result.ref_similarity}")
                         result_images.append(result.image)
                     else:
@@ -644,7 +656,7 @@ class FaceSwapScript(scripts.Script):
         if any([u.enable for u in self.units]):
             result_images = processed.images[:]
             result_infos = processed.infotexts[:]
-            if p.batch_size > 1 and p.n_iter > 1:
+            if p.batch_size > 1 or p.n_iter > 1:
                 # Remove grid image if batch size is greater than 1 :
                 result_images = result_images[1:]
                 result_infos = result_infos[1:]
