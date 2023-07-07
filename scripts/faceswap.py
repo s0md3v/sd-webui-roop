@@ -582,7 +582,7 @@ class FaceSwapScript(scripts.Script):
             #tools_ui() #disable tools in accordion
         return components + upscaler + configuration
 
-    def process(self, p: StableDiffusionProcessing, *components):
+    def before_process(self, p: StableDiffusionProcessing, *components):
         self.units: List[FaceSwapUnitSettings] = []
         for i in range(0, self.units_count):
             self.units += [FaceSwapUnitSettings.get_unit_configuration(i, components)]
