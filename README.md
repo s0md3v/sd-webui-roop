@@ -46,6 +46,28 @@ If you did and your console doesn't show any errors, it means roop detected that
 
 ### FAQ
 
+The issues are full of requests that sometimes stem from a misunderstanding of the tool. We don't have the time to respond to all these requests. This FAQ contains some frequently asked questions. Please read this before submitting an issue.
+
+#### I don't see any extension after restart
+
+This is likely because you're using Windows and haven't installed the requirements. Check that there are no errors in the terminal and check the installation section.
+
+If you have a specific configuration (python 3.11, ...), test it with a clean installation of stable diffusion before submitting an issue.
+
+#### Why i don't get good quality results
+
+The model used first reduces the resolution of the face to be modified before generating a 128x128 image. This means that whatever the size of the original image, the faces won't have a resolution higher than 128x128, which is very low.
+
+The process therefore gives very average results, which can be mitigated with the use of face restorer and upscaler.
+
+There's no way to improve this, and there's no point in asking for it. Roop is an interface for the model. Unless you can re-train a model for insighface and make the necessary changes in the library (see below), the results will remain average.
+
+Don't be too demanding about results. Think of the extension as a low-cost alternative to lora, or as a complement to it.
+
+#### Same gender does not detect correct gender
+
+This information is provided by the analysis model. It is therefore potentially wrong. Nothing can be done to improve it on our side.
+
 #### Why GPU is not supported ?
 
 Adding support for the GPU is easy in itself. Simply change the onnxruntime implementation and change the providers in the swapper. You can try this with roop.
@@ -90,8 +112,10 @@ The model used is based on insightface's inswapper. More specifically [here](htt
 
 The model was made public for a time by the insightface team for research use. They have not published any information on the training method.
 
-The model produces faces of 128x128 in resolution, which is low. You need to upscale them to get a correct result. The insightface code is not designed for higher resolutions (see the [Router] class (https://github.com/deepinsight/insightface/blob/fc622003d5410a64c96024563d7a093b2a55487c/python-package/insightface/model_zoo/model_zoo.py#L35)).
+The model produces faces of 128x128 in resolution, which is low. You need to upscale them to get a correct result. The insightface code is not designed for higher resolutions (see the [Router](https://github.com/deepinsight/insightface/blob/fc622003d5410a64c96024563d7a093b2a55487c/python-package/insightface/model_zoo/model_zoo.py#L35) class).
 
 #### Why not use simswap ?
 
-The simswap models are based on older insightface architectures and simswap is not released as a python package. Its use would be very complex for a gain that is not certain.
+The simswap models are based on older insightface architectures and simswap is not released as a python package. Its use would be complex for a gain that is not certain.
+
+If you get it to work, don't hesitate to submit a pull request.

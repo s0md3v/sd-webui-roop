@@ -1,5 +1,6 @@
 import glob
 import importlib
+from modules.scripts import PostprocessImageArgs,scripts_postprocessing
 
 from scripts import (cimage, imgutils, roop_logging, roop_version, swapper,
                      upscaling)
@@ -19,7 +20,7 @@ import os
 import tempfile
 from dataclasses import dataclass, fields
 from pprint import pformat, pprint
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Set, Tuple, Union, Optional
 
 import cv2
 import dill as pickle
@@ -32,7 +33,7 @@ import torch
 from insightface.app.common import Face
 from modules import processing, script_callbacks, scripts, shared
 from modules.face_restoration import FaceRestoration
-from modules.images import save_image
+from modules.images import save_image, image_grid
 from modules.processing import (Processed, StableDiffusionProcessing,
                                 StableDiffusionProcessingImg2Img,
                                 StableDiffusionProcessingTxt2Img)
@@ -610,79 +611,90 @@ class FaceSwapScript(scripts.Script):
                 p.init_images = init_images
 
 
-    def process_images_unit(self, unit : FaceSwapUnitSettings, images, infos = None)  :
+    def process_image_unit(self, unit : FaceSwapUnitSettings, image, info = None) -> Tuple[Optional[Image.Image], Optional[str]]:
         if unit.enable :
-            result_images = []
-            result_infos = []
+            if convert_to_sd(image) :
+                return (image, info)
+            if not unit.blend_faces :
+                src_faces = unit.faces
+                logger.info(f"will generate {len(src_faces)} images")
+            else :
+                logger.info("blend all faces together")
+                src_faces = [unit.blended_faces]
+            for i,src_face in enumerate(src_faces):
+                logger.info(f"Process face {i}")
+                result: swapper.ImageResult = swapper.swap_face(
+                    unit.reference_face if unit.reference_face is not None else src_face,
+                    src_face,
+                    image,
+                    faces_index=unit.faces_index,
+                    model=self.model,
+                    same_gender=unit.same_gender,
+                    upscaled_swapper=self.upscaled_swapper
+                )
+                if (not unit.check_similarity) or result.similarity and all([result.similarity.values()!=0]+[x >= unit.min_sim for x in result.similarity.values()]) and all([result.ref_similarity.values()!=0]+[x >= unit.min_ref_sim for x in result.ref_similarity.values()]):
+                    return (result.image, f"{info}, similarity = {result.similarity}, ref_similarity = {result.ref_similarity}")
+                else:
+                    logger.warning(
+                        f"skip, similarity to low, sim = {result.similarity} (target {unit.min_sim}) ref sim = {result.ref_similarity} (target = {unit.min_ref_sim})"
+                    )
+        return (None, None)
+
+    def postprocess_batch(self, p, *args, **kwargs):
+        if self.show_unmodified:
+            batch_index = kwargs.pop('batch_number', 0)
+            torch_images = kwargs["images"]
+            pil_images = imgutils.torch_to_pil(torch_images)
+            
+            self._orig_images = pil_images
+            for img in pil_images :
+                if p.outpath_samples and opts.samples_save :
+                    save_image(img, p.outpath_samples, "", p.seeds[batch_index], p.prompts[batch_index], opts.samples_format, p=p, suffix="-before-swap")
+                
+            return 
+    
+    def process_images_unit(self, unit : FaceSwapUnitSettings, images : List[Image.Image], infos = None) -> Tuple[List[Image.Image], List[str]] :
+        if unit.enable :
+            result_images : List[Image.Image] = []
+            result_infos : List[str]= []
             if not infos :
                 infos = [None] * len(images)
             for i, (img, info) in enumerate(zip(images, infos)):
-                if convert_to_sd(img) :
-                    result_infos.append(info)
-                    result_images.append(img)
-                    continue
-                if not unit.blend_faces :
-                    src_faces = unit.faces
-                    logger.info(f"will generate {len(src_faces)} images")
-                else :
-                    logger.info("blend all faces together")
-                    src_faces = [unit.blended_faces]
-                for i,src_face in enumerate(src_faces):
-                    logger.info(f"Process face {i}")
-                    result: swapper.ImageResult = swapper.swap_face(
-                        unit.reference_face if unit.reference_face is not None else src_face,
-                        src_face,
-                        img,
-                        faces_index=unit.faces_index,
-                        model=self.model,
-                        same_gender=unit.same_gender,
-                        upscaled_swapper=self.upscaled_swapper
-                    )
-                    if (not unit.check_similarity) or result.similarity and all([result.similarity.values()!=0]+[x >= unit.min_sim for x in result.similarity.values()]) and all([result.ref_similarity.values()!=0]+[x >= unit.min_ref_sim for x in result.ref_similarity.values()]):
-                        result_infos.append(f"{info}, similarity = {result.similarity}, ref_similarity = {result.ref_similarity}")
-                        result_images.append(result.image)
-                    else:
-                        logger.warning(
-                            f"skip, similarity to low, sim = {result.similarity} (target {unit.min_sim}) ref sim = {result.ref_similarity} (target = {unit.min_ref_sim})"
-                        )
+                (result_image, result_info) = self.process_image_unit(unit, img, info)
+                if result_image is not None and result_info is not None :
+                    result_images.append(result_image)
+                    result_infos.append(result_info)
             logger.info(f"{len(result_images)} images processed")
             return (result_images, result_infos)
         return (images, infos)
 
-    def postprocess(self, p : StableDiffusionProcessing, processed: Processed, *args):
-        orig_images = processed.images
-        orig_infos = processed.infotexts
-
+    def postprocess_image(self, p, script_pp: PostprocessImageArgs, *args):
+        img : Image.Image = script_pp.image
+        infos = ""
         if any([u.enable for u in self.units]):
-            result_images = processed.images[:]
-            result_infos = processed.infotexts[:]
-            if p.batch_size > 1 or p.n_iter > 1:
-                # Remove grid image if batch size is greater than 1 :
-                result_images = result_images[1:]
-                result_infos = result_infos[1:]
-                logger.info("Discard grid image from swapping process. This could induce bugs with some extensions.")
-
             for i, unit in enumerate(self.units):
-                if unit.enable and unit.swap_in_generated :
-                    (result_images, result_infos) = self.process_images_unit(unit, result_images, result_infos)
-                    logger.info(f"unit {i+1}> processed : {len(result_images)}, {len(result_infos)}")
+                if unit.enable :
+                    img,info = self.process_image_unit(image=img, unit=unit, info="")
+                    logger.info(f"unit {i+1}> processed")
+                    infos += info or ""
+                    if img is None :
+                        logger.error("Failed to process image - Switch back to original image")
+                        img = script_pp.image
+        try :   
+            if self.upscale_options is not None:
+                img = upscale_image(img, self.upscale_options)
+        except Exception as e:
+            logger.error("Failed to upscale : %s", e)
+        pp = scripts_postprocessing.PostprocessedImage(img)
+        pp.info = {"face.similarity" : infos}
+        p.extra_generation_params.update(pp.info)
+        script_pp.image = pp.image
 
-            for i, img in enumerate(result_images):
-                if self.upscale_options is not None:
-                    result_images[i] = upscale_image(img, self.upscale_options)
-                if p.outpath_samples and opts.samples_save :
-                    save_image(result_images[i], p.outpath_samples, seed=int(p.seed), info=result_infos[i], basename="swapped")                           
-            if len(result_images) > 1:
-                try :
-                    # prepend swapped grid to result_images :
-                    result_images = [create_square_image(result_images)] + result_images
-                except Exception as e :
-                    logger.error("Error building result grid %s", e)
-            processed.images = result_images
-            processed.infotexts = result_infos
-            
-            if self.show_unmodified:
-                processed.images += orig_images
-                processed.infotexts+= orig_infos
+    def postprocess(self, p : StableDiffusionProcessing, processed: Processed, *args):
+        if self.show_unmodified:
+            if len(self._orig_images)> 1 :
+                processed.images.append(image_grid(self._orig_images))
+            processed.images += self._orig_images
+            processed.infotexts+= processed.infotexts # duplicate infotexts           
 
 
