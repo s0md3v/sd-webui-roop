@@ -43,3 +43,79 @@ If there are multiple faces in an image, select the face numbers you wish to swa
 Did you click "Enable"?
 
 If you did and your console doesn't show any errors, it means roop detected that your image is either NSFW or wasn't able to detect a face at all.
+
+### FAQ
+
+The issues are full of requests that sometimes stem from a misunderstanding of the tool. We don't have the time to respond to all these requests. This FAQ contains some frequently asked questions. Please read this before submitting an issue.
+
+#### I don't see any extension after restart
+
+This is likely because you're using Windows and haven't installed the requirements. Check that there are no errors in the terminal and check the installation section.
+
+If you have a specific configuration (python 3.11, ...), test it with a clean installation of stable diffusion before submitting an issue.
+
+#### Why i don't get good quality results
+
+The model used first reduces the resolution of the face to be modified before generating a 128x128 image. This means that whatever the size of the original image, the faces won't have a resolution higher than 128x128, which is very low.
+
+The process therefore gives very average results, which can be mitigated with the use of face restorer and upscaler.
+
+There's no way to improve this, and there's no point in asking for it. Roop is an interface for the model. Unless you can re-train a model for insighface and make the necessary changes in the library (see below), the results will remain average.
+
+Don't be too demanding about results. Think of the extension as a low-cost alternative to lora, or as a complement to it.
+
+#### Same gender does not detect correct gender
+
+This information is provided by the analysis model. It is therefore potentially wrong. Nothing can be done to improve it on our side.
+
+#### Why GPU is not supported ?
+
+Adding support for the GPU is easy in itself. Simply change the onnxruntime implementation and change the providers in the swapper. You can try this with roop.
+
+If it's so easy, why not make it an option? Because sd models already take a lot of vram, and adding the model to the GPU doesn't bring any significant performance gains as it is. It's especially useful if you decide to handle a lot of frames and video. Experience shows that this is more trouble than it's worth. That's why it's pointless to ask for this feature.
+
+To convince yourself, you can follow this guide https://github.com/s0md3v/roop/wiki/2.-Acceleration and change the providers in the swapper.
+
+#### What is upscaled inswapper in sd roop options ?
+
+It's a test to add an upscale of each face with LDSR before integrating it into the image. This is done by rewriting a small portion of the insightface code. This results in a slightly better quality face, at the expense of a little time. In some cases, this may avoid the need to use codeformer or gfpgan.
+
+#### What is face blending ?
+
+Insighface works by generating an embedding for each face. This embedding is a representation of the face's characteristics. Multiple faces embedding can be averaged to generate a blended face. 
+
+This has several advantages:
+
++ create a better quality embedding based on several faces
++ create a face composed of several people.
+
+To create a composite face, you can either use the checkpoint builder. or drop several images into image batch sources.
+
+#### What is a face checkpoint ?
+
+A face checkpoint can be created from the tab in sd (build tool). It will blend all the images dropped into the tab and save the embedding to a file.
+
+The advantage is that an embedding is very small (2kb). And can be reused later without the need for additional calculations.
+
+Checkpoints are pkl files. You need to be very careful when exchanging this type of file, as they are not secure by default and can execute potentially malicious code.
+
+
+#### How similarity is determined ?
+
+Similarity is determined by comparing embeddings. A score of 1 means that the two faces are exactly the same. A score of 0 means that the faces are different.
+
+You can remove images from the results if the generated image doesn't match a reference by using the sliders in the faces tabs.
+
+#### What model is used?
+
+The model used is based on insightface's inswapper. More specifically [here](https://github.com/deepinsight/insightface/blob/fc622003d5410a64c96024563d7a093b2a55487c/python-package/insightface/model_zoo/inswapper.py#L12) 
+
+The model was made public for a time by the insightface team for research use. They have not published any information on the training method.
+
+The model produces faces of 128x128 in resolution, which is low. You need to upscale them to get a correct result. The insightface code is not designed for higher resolutions (see the [Router](https://github.com/deepinsight/insightface/blob/fc622003d5410a64c96024563d7a093b2a55487c/python-package/insightface/model_zoo/model_zoo.py#L35) class).
+
+#### Why not use simswap ?
+
+The simswap models are based on older insightface architectures and simswap is not released as a python package. Its use would be complex for a gain that is not certain.
+
+If you get it to work, don't hesitate to submit a pull request.
