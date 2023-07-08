@@ -210,7 +210,7 @@ def compare(img1, img2):
 
 
 
-def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibility,upscaler_name,upscaler_scale, upscaler_visibility,inpainting_denoising_strengh, inpainting_prompt, inpainting_negative_prompt, inpainting_steps):
+def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibility,upscaler_name,upscaler_scale, upscaler_visibility,inpainting_denoising_strengh, inpainting_prompt, inpainting_negative_prompt, inpainting_steps, inpainting_sampler,inpainting_when):
     if not extract_path :
         tempfile.mkdtemp()
     if files is not None:
@@ -234,7 +234,9 @@ def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibi
                                                                             inpainting_denoising_strengh=inpainting_denoising_strengh,
                                                                             inpainting_prompt=inpainting_prompt,
                                                                             inpainting_steps=inpainting_steps,
-                                                                            inpainting_negative_prompt=inpainting_negative_prompt))
+                                                                            inpainting_negative_prompt=inpainting_negative_prompt,
+                                                                            inpainting_when=inpainting_when,
+                                                                            inpainting_sampler=inpainting_sampler))
                     path = tempfile.NamedTemporaryFile(delete=False,suffix=".png",dir=extract_path).name
                     face_image.save(path)
                     face_images.append(path)
@@ -242,8 +244,20 @@ def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibi
         return images
     return None
 
+def analyse_faces(image, det_threshold = 0.5) :
+    try :
+        faces = swapper.get_faces(imgutils.pil_to_cv2(image), det_thresh=det_threshold)
+        result = ""
+        for i,face in enumerate(faces) :
+            result+= f"\nFace {i} \n" + "="*40 +"\n"
+            result+= pformat(face) + "\n"
+            result+= "="*40
+        return result
 
-
+    except Exception as e :
+        logger.error("Analysis Failed : %s", e)
+        return "Analysis Failed"
+    
 def build_face_checkpoint_and_save(batch_files, name):
     """
     Builds a face checkpoint, swaps faces, and saves the result to a file.
@@ -437,12 +451,19 @@ def tools_ui():
             explore_result_text = gr.Dataframe(
                 interactive=False, label="Explored"
             )
+        with gr.Tab("Analyse Face"):
+            img_to_analyse = gr.components.Image(type="pil", label="Face")
+            analyse_det_threshold = gr.Slider(0.1, 1, 0.5, step=0.01, label="Detection threshold")
+            analyse_btn = gr.Button("Analyse")
+            analyse_results = gr.Textbox(label="Results", interactive=False, value="")
+
         upscale_options = upscaler_ui()
 
     explore_btn.click(explore_onnx_faceswap_model, inputs=[model], outputs=[explore_result_text])  
     compare_btn.click(compare, inputs=[img1, img2], outputs=[compare_result_text])
     generate_checkpoint_btn.click(build_face_checkpoint_and_save, inputs=[batch_files, name], outputs=[preview])
     extract_btn.click(extract_faces, inputs=[extracted_source_files, extract_save_path]+upscale_options, outputs=[extracted_faces])  
+    analyse_btn.click(analyse_faces, inputs=[img_to_analyse,analyse_det_threshold], outputs=[analyse_results])  
 
 def on_ui_tabs() :
     with gr.Blocks(analytics_enabled=False) as ui_faceswap:

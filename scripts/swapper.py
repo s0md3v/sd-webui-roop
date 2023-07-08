@@ -132,7 +132,7 @@ def getFaceSwapModel(model_path: str):
     return FS_MODEL
 
 
-def get_faces(img_data: np.ndarray, det_size=(640, 640)) -> List[Face]:
+def get_faces(img_data: np.ndarray, det_size=(640, 640), det_thresh=0.5) -> List[Face]:
     """
     Detects and retrieves faces from an image using an analysis model.
 
@@ -147,7 +147,7 @@ def get_faces(img_data: np.ndarray, det_size=(640, 640)) -> List[Face]:
     face_analyser = copy.deepcopy(getAnalysisModel())
 
     # Prepare the analysis model for face detection with the specified detection size
-    face_analyser.prepare(ctx_id=0, det_size=det_size)
+    face_analyser.prepare(ctx_id=0, det_thresh=det_thresh, det_size=det_size)
 
     # Get the detected faces from the image using the analysis model
     face = face_analyser.get(img_data)
@@ -156,7 +156,7 @@ def get_faces(img_data: np.ndarray, det_size=(640, 640)) -> List[Face]:
     # recursively call the function with a smaller detection size
     if len(face) == 0 and det_size[0] > 320 and det_size[1] > 320:
         det_size_half = (det_size[0] // 2, det_size[1] // 2)
-        return get_faces(img_data, det_size=det_size_half)
+        return get_faces(img_data, det_size=det_size_half, det_thresh=det_thresh)
 
     try:
         # Sort the detected faces based on their x-coordinate of the bounding box

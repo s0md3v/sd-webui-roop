@@ -12,7 +12,8 @@ from modules.upscaler import UpscalerData
 from PIL import Image
 from scripts.roop_logging import logger
 from scripts.imgutils import cv2_to_pil, pil_to_cv2
-
+from modules import processing
+from blendmodes.blend import blendLayers, BlendType
 
 def get_ldsr() -> UpscalerData:
     for upscaler in shared.sd_upscalers:
@@ -65,6 +66,10 @@ class UpscaledINSwapper():
                     blurred = cv2.GaussianBlur(bgr_fake, (0, 0), 3)
                     bgr_fake = cv2.addWeighted(bgr_fake, 1.5, blurred, -0.5, 0)
 
+                    # Apply color corrections
+                    correction = processing.setup_color_correction(cv2_to_pil(aimg))
+                    bgr_fake_pil = processing.apply_color_correction(correction, cv2_to_pil(bgr_fake))
+                    bgr_fake = pil_to_cv2(bgr_fake_pil)
 
                 target_img = img
                 fake_diff = bgr_fake.astype(np.float32) - aimg.astype(np.float32)
