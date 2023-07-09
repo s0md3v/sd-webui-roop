@@ -479,6 +479,12 @@ def on_ui_settings():
         3, "Max faces units (requires restart)", gr.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
     shared.opts.add_option("roop_upscaled_swapper", shared.OptionInfo(
         False, "Upscaled swapper", gr.Checkbox, {"interactive": True}, section=section))
+    shared.opts.add_option("roop_upscaled_swapper_upscaler", shared.OptionInfo(
+        None, "Upscaled swapper upscaler (Recommanded : LDSR)", gr.Dropdown, {"interactive": True, "choices" : [upscaler.name for upscaler in shared.sd_upscalers]}, section=section))
+    shared.opts.add_option("roop_upscaled_swapper_sharpen", shared.OptionInfo(
+        True, "Upscaled swapper sharpen", gr.Checkbox, {"interactive": True}, section=section))
+    shared.opts.add_option("roop_upscaled_swapper_fixcolor", shared.OptionInfo(
+        True, "Upscaled swapper color correction", gr.Checkbox, {"interactive": True}, section=section))    
 script_callbacks.on_ui_settings(on_ui_settings)
 
 

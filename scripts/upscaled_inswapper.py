@@ -14,10 +14,11 @@ from scripts.roop_logging import logger
 from scripts.imgutils import cv2_to_pil, pil_to_cv2
 from modules import processing
 from blendmodes.blend import blendLayers, BlendType
+from modules.shared import cmd_opts, opts, state
 
-def get_ldsr() -> UpscalerData:
+def get_upscaler() -> UpscalerData:
     for upscaler in shared.sd_upscalers:
-        if upscaler.name == "LDSR":
+        if upscaler.name == opts.data.get("roop_upscaled_swapper_upscaler", "LDSR"):
             return upscaler
     return None
             
@@ -33,8 +34,8 @@ class UpscaledINSwapper():
 
     def super_resolution(self,img, k = 2) :
         pil_img = cv2_to_pil(img)
-        upscaled = get_ldsr().scaler.upscale(
-                pil_img, k, get_ldsr().data_path
+        upscaled = get_upscaler().scaler.upscale(
+                pil_img, k, get_upscaler().data_path
         )
         return pil_to_cv2(upscaled)
 
@@ -56,20 +57,24 @@ class UpscaledINSwapper():
             else:
                 if upscale :
                     print("*"*80)
-                    print("LDSR inswapper")
+                    print(f"Upscaled inswapper using {opts.data.get('roop_upscaled_swapper_upscaler', 'LDSR')}")
                     print("*"*80)
                     k = 4
                     aimg, M = face_align.norm_crop2(img, target_face.kps, self.input_size[0]*k)                
                     bgr_fake = self.super_resolution(bgr_fake, k)
                     
-                    # Add sharpness
-                    blurred = cv2.GaussianBlur(bgr_fake, (0, 0), 3)
-                    bgr_fake = cv2.addWeighted(bgr_fake, 1.5, blurred, -0.5, 0)
+                    if opts.data.get("roop_upscaled_swapper_sharpen", True) :
+                        print("sharpen")
+                        # Add sharpness
+                        blurred = cv2.GaussianBlur(bgr_fake, (0, 0), 3)
+                        bgr_fake = cv2.addWeighted(bgr_fake, 1.5, blurred, -0.5, 0)
 
                     # Apply color corrections
-                    correction = processing.setup_color_correction(cv2_to_pil(aimg))
-                    bgr_fake_pil = processing.apply_color_correction(correction, cv2_to_pil(bgr_fake))
-                    bgr_fake = pil_to_cv2(bgr_fake_pil)
+                    if opts.data.get("roop_upscaled_swapper_fixcolor", True) :
+                        print("color correction")
+                        correction = processing.setup_color_correction(cv2_to_pil(aimg))
+                        bgr_fake_pil = processing.apply_color_correction(correction, cv2_to_pil(bgr_fake))
+                        bgr_fake = pil_to_cv2(bgr_fake_pil)
 
                 target_img = img
                 fake_diff = bgr_fake.astype(np.float32) - aimg.astype(np.float32)
