@@ -498,6 +498,10 @@ class FaceSwapScript(scripts.Script):
     def upscaled_swapper(self) :
         return opts.data.get("roop_upscaled_swapper", False)
 
+    @property
+    def enabled(self) :
+        return any([u.enable for u in self.units])
+
     def title(self):
         return f"roop"
 
@@ -668,17 +672,18 @@ class FaceSwapScript(scripts.Script):
         return (None, None)
 
     def postprocess_batch(self, p, *args, **kwargs):
-        if self.show_unmodified:
-            batch_index = kwargs.pop('batch_number', 0)
-            torch_images = kwargs["images"]
-            pil_images = imgutils.torch_to_pil(torch_images)
-            
-            self._orig_images = pil_images
-            for img in pil_images :
-                if p.outpath_samples and opts.samples_save :
-                    save_image(img, p.outpath_samples, "", p.seeds[batch_index], p.prompts[batch_index], opts.samples_format, p=p, suffix="-before-swap")
+        if self.enabled :
+            if self.show_unmodified:
+                batch_index = kwargs.pop('batch_number', 0)
+                torch_images = kwargs["images"]
+                pil_images = imgutils.torch_to_pil(torch_images)
                 
-            return 
+                self._orig_images = pil_images
+                for img in pil_images :
+                    if p.outpath_samples and opts.samples_save :
+                        save_image(img, p.outpath_samples, "", p.seeds[batch_index], p.prompts[batch_index], opts.samples_format, p=p, suffix="-before-swap")
+                    
+                return 
     
     def process_images_unit(self, unit : FaceSwapUnitSettings, images : List[Image.Image], infos = None) -> Tuple[List[Image.Image], List[str]] :
         if unit.enable :
@@ -696,32 +701,34 @@ class FaceSwapScript(scripts.Script):
         return (images, infos)
 
     def postprocess_image(self, p, script_pp: PostprocessImageArgs, *args):
-        img : Image.Image = script_pp.image
-        infos = ""
-        if any([u.enable for u in self.units]):
-            for i, unit in enumerate(self.units):
-                if unit.enable :
-                    img,info = self.process_image_unit(image=img, unit=unit, info="")
-                    logger.info(f"unit {i+1}> processed")
-                    infos += info or ""
-                    if img is None :
-                        logger.error("Failed to process image - Switch back to original image")
-                        img = script_pp.image
-        try :   
-            if self.upscale_options is not None:
-                img = upscale_image(img, self.upscale_options)
-        except Exception as e:
-            logger.error("Failed to upscale : %s", e)
-        pp = scripts_postprocessing.PostprocessedImage(img)
-        pp.info = {"face.similarity" : infos}
-        p.extra_generation_params.update(pp.info)
-        script_pp.image = pp.image
+        if self.enabled :
+            img : Image.Image = script_pp.image
+            infos = ""
+            if any([u.enable for u in self.units]):
+                for i, unit in enumerate(self.units):
+                    if unit.enable :
+                        img,info = self.process_image_unit(image=img, unit=unit, info="")
+                        logger.info(f"unit {i+1}> processed")
+                        infos += info or ""
+                        if img is None :
+                            logger.error("Failed to process image - Switch back to original image")
+                            img = script_pp.image
+            try :   
+                if self.upscale_options is not None:
+                    img = upscale_image(img, self.upscale_options)
+            except Exception as e:
+                logger.error("Failed to upscale : %s", e)
+            pp = scripts_postprocessing.PostprocessedImage(img)
+            pp.info = {"face.similarity" : infos}
+            p.extra_generation_params.update(pp.info)
+            script_pp.image = pp.image
 
     def postprocess(self, p : StableDiffusionProcessing, processed: Processed, *args):
-        if self.show_unmodified:
-            if len(self._orig_images)> 1 :
-                processed.images.append(image_grid(self._orig_images))
-            processed.images += self._orig_images
-            processed.infotexts+= processed.infotexts # duplicate infotexts           
+        if self.enabled :
+            if self.show_unmodified:
+                if len(self._orig_images)> 1 :
+                    processed.images.append(image_grid(self._orig_images))
+                processed.images += self._orig_images
+                processed.infotexts+= processed.infotexts # duplicate infotexts           
 
 
