@@ -277,6 +277,8 @@ def build_face_checkpoint_and_save(batch_files, name):
         scripts.basedir(), "extensions", "sd-webui-roop", "references"
     )
     faces_path = os.path.join(scripts.basedir(), "models", "roop","faces")
+    if not os.path.exists(faces_path):
+        os.makedirs(faces_path)
 
     target_img = None
     if blended_face:
@@ -340,7 +342,7 @@ def explore_onnx_faceswap_model(model_path):
     return df
 
 def upscaler_ui():
-    with gr.Tab(f"Enhancements"):
+    with gr.Tab(f"Post-Processing"):
         gr.Markdown(
                 """Upscaling is performed on the whole image. Upscaling happens before face restoration.""")
         with gr.Row():
@@ -475,6 +477,11 @@ script_callbacks.on_ui_tabs(on_ui_tabs)
 
 def on_ui_settings():
     section = ('roop', "Roop")
+    models = get_models()
+    shared.opts.add_option("roop_model", shared.OptionInfo(
+        models[0] if len(models) > 0 else "None",  "Roop FaceSwap Model", gr.Dropdown, {"interactive": True, "choices" : models}, section=section)) 
+    shared.opts.add_option("roop_keep_original", shared.OptionInfo(
+        False, "keep original image before swapping", gr.Checkbox, {"interactive": True}, section=section))               
     shared.opts.add_option("roop_units_count", shared.OptionInfo(
         3, "Max faces units (requires restart)", gr.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
     shared.opts.add_option("roop_upscaled_swapper", shared.OptionInfo(
@@ -485,6 +492,9 @@ def on_ui_settings():
         True, "Upscaled swapper sharpen", gr.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("roop_upscaled_swapper_fixcolor", shared.OptionInfo(
         True, "Upscaled swapper color correction", gr.Checkbox, {"interactive": True}, section=section))    
+
+
+
 script_callbacks.on_ui_settings(on_ui_settings)
 
 
@@ -501,6 +511,22 @@ class FaceSwapScript(scripts.Script):
     @property
     def enabled(self) :
         return any([u.enable for u in self.units])
+
+    @property
+    def model(self) :
+        model = opts.data.get("roop_model", None)
+        if model is None :
+            models = get_models()
+            model = models[0] if len(models) else None
+        logger.info("Try to use model : %s", model)
+        if not os.path.isfile(model):
+            logger.error("The model %s cannot be found or loaded", model)
+            raise FileNotFoundError("No faceswap model found. Please add it to the roop directory.")
+        return model
+
+    @property
+    def keep_original_images(self) :
+        return opts.data.get("roop_keep_original", False)
 
     def title(self):
         return f"roop"
@@ -582,37 +608,13 @@ class FaceSwapScript(scripts.Script):
             swap_in_generated,
         ]
 
-    def configuration_ui(self, is_img2img):
-        with gr.Tab(f"Settings"):
-            models = get_models()
-            show_unmodified = gr.Checkbox(
-                False,
-                placeholder="Show Unmodified",
-                label="Show Unmodified (original)",
-            )
-            if len(models) == 0:
-                logger.warning(
-                    "You should at least have one model in models directory, please read the doc here : https://github.com/s0md3v/sd-webui-roop"
-                )
-                model = gr.inputs.Dropdown(
-                    choices=models,
-                    label="Model not found, please download one and reload automatic 1111",
-                )
-            else:
-                model = gr.inputs.Dropdown(
-                    choices=models, label="Model", default=models[0]
-                )
-        return [show_unmodified, model]
-
     def ui(self, is_img2img):
         with gr.Accordion(f"Roop {version_flag}", open=False):
             components = []
             for i in range(1, self.units_count + 1):
                 components += self.faceswap_unit_ui(is_img2img, i)
             upscaler = upscaler_ui()
-            configuration = self.configuration_ui(is_img2img)
-            #tools_ui() #disable tools in accordion
-        return components + upscaler + configuration
+        return components + upscaler
 
     def before_process(self, p: StableDiffusionProcessing, *components):
         self.units: List[FaceSwapUnitSettings] = []
@@ -628,8 +630,7 @@ class FaceSwapScript(scripts.Script):
             *components[shift : shift + len(fields(UpscaleOptions))]
         )
         logger.debug("%s", pformat(self.upscale_options))
-        self.model = components[-1]
-        self.show_unmodified = components[-2]
+
 
         if isinstance(p, StableDiffusionProcessingImg2Img):
             if any([u.enable for u in self.units]):
@@ -673,7 +674,7 @@ class FaceSwapScript(scripts.Script):
 
     def postprocess_batch(self, p, *args, **kwargs):
         if self.enabled :
-            if self.show_unmodified:
+            if self.keep_original_images:
                 batch_index = kwargs.pop('batch_number', 0)
                 torch_images = kwargs["images"]
                 pil_images = imgutils.torch_to_pil(torch_images)
@@ -725,7 +726,7 @@ class FaceSwapScript(scripts.Script):
 
     def postprocess(self, p : StableDiffusionProcessing, processed: Processed, *args):
         if self.enabled :
-            if self.show_unmodified:
+            if self.keep_original_images:
                 if len(self._orig_images)> 1 :
                     processed.images.append(image_grid(self._orig_images))
                 processed.images += self._orig_images

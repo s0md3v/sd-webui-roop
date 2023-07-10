@@ -339,6 +339,8 @@ def swap_face(
 
             except Exception as e:
                 logger.error("Swapping failed %s", e)
+                raise e
     except Exception as e :
         logger.error("Conversion failed %s", e)
+        raise e
     return return_result
