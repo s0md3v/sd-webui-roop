@@ -15,6 +15,7 @@ from scripts.imgutils import cv2_to_pil, pil_to_cv2
 from modules import processing
 from blendmodes.blend import blendLayers, BlendType
 from modules.shared import cmd_opts, opts, state
+from scripts.upscaling import UpscaleOptions, upscale_image
 
 def get_upscaler() -> UpscalerData:
     for upscaler in shared.sd_upscalers:
@@ -34,9 +35,13 @@ class UpscaledINSwapper():
 
     def super_resolution(self,img, k = 2) :
         pil_img = cv2_to_pil(img)
-        upscaled = get_upscaler().scaler.upscale(
-                pil_img, k, get_upscaler().data_path
-        )
+        upscaled =upscale_image(pil_img, UpscaleOptions(
+            upscaler_name=opts.data.get('roop_upscaled_swapper_upscaler', 'LDSR'),
+            upscale_visibility=1,
+            scale=k,
+            face_restorer_name=opts.data.get('roop_upscaled_swapper_face_restorer', ""),
+            codeformer_weight= opts.data.get('roop_upscaled_swapper_face_restorer_weight', 1),
+            restorer_visibility=opts.data.get('roop_upscaled_swapper_face_restorer_visibility', 1)))
         return pil_to_cv2(upscaled)
 
     def get(self, img, target_face, source_face, paste_back=True, upscale = True):

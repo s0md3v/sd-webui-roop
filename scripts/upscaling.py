@@ -8,7 +8,8 @@ from PIL import Image
 import numpy as np
 from modules import shared
 from scripts import swapper, imgutils
-from modules import scripts, shared, processing
+from modules import scripts, shared, processing, codeformer_model
+
 from modules.processing import (Processed, StableDiffusionProcessing,
                                 StableDiffusionProcessingImg2Img,
                                 StableDiffusionProcessingTxt2Img)
@@ -24,6 +25,8 @@ class InpaintingWhen(Enum):
 class UpscaleOptions:
     face_restorer_name: str = ""
     restorer_visibility: float = 0.5
+    codeformer_weight: float = 1
+
     upscaler_name: str = ""
     scale: int = 1
     upscale_visibility: float = 0.5
@@ -88,7 +91,11 @@ def upscale_image(image: Image.Image, upscale_options: UpscaleOptions):
             original_image = result_image.copy()
             logger.info("Restore face with %s", upscale_options.face_restorer.name())
             numpy_image = np.array(result_image)
-            numpy_image = upscale_options.face_restorer.restore(numpy_image)
+            if upscale_options.face_restorer_name == "CodeFormer" :
+                numpy_image = codeformer_model.codeformer.restore(numpy_image, w=upscale_options.codeformer_weight)
+            else :
+                numpy_image = upscale_options.face_restorer.restore(numpy_image)
+
             restored_image = Image.fromarray(numpy_image)
             result_image = Image.blend(
                 original_image, restored_image, upscale_options.restorer_visibility

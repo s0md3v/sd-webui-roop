@@ -210,7 +210,7 @@ def compare(img1, img2):
 
 
 
-def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibility,upscaler_name,upscaler_scale, upscaler_visibility,inpainting_denoising_strengh, inpainting_prompt, inpainting_negative_prompt, inpainting_steps, inpainting_sampler,inpainting_when):
+def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibility, codeformer_weight,upscaler_name,upscaler_scale, upscaler_visibility,inpainting_denoising_strengh, inpainting_prompt, inpainting_negative_prompt, inpainting_steps, inpainting_sampler,inpainting_when):
     if not extract_path :
         tempfile.mkdtemp()
     if files is not None:
@@ -228,6 +228,7 @@ def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibi
                         scale = 1 if face_image.width > 512 else 512//face_image.width
                         face_image = upscale_image(face_image, UpscaleOptions(face_restorer_name=face_restorer_name,
                                                                             restorer_visibility=face_restorer_visibility,
+                                                                            codeformer_weight= codeformer_weight,
                                                                             upscaler_name=upscaler_name, 
                                                                             upscale_visibility=upscaler_visibility, 
                                                                             scale=scale,
@@ -352,9 +353,13 @@ def upscaler_ui():
                 value=shared.face_restorers[0].name(),
                 type="value",
             )
-            face_restorer_visibility = gr.Slider(
-                0, 1, 1, step=0.1, label="Restore visibility"
-            )
+            with gr.Column():
+                face_restorer_visibility = gr.Slider(
+                    0, 1, 1, step=0.001, label="Restore visibility"
+                )
+                codeformer_weight = gr.Slider(
+                    0, 1, 1, step=0.001, label="codeformer weight"
+                )                
         upscaler_name = gr.inputs.Dropdown(
             choices=[upscaler.name for upscaler in shared.sd_upscalers],
             label="Upscaler",
@@ -387,6 +392,7 @@ def upscaler_ui():
     return [
         face_restorer_name,
         face_restorer_visibility,
+        codeformer_weight,
         upscaler_name,
         upscaler_scale,
         upscaler_visibility,
@@ -492,8 +498,12 @@ def on_ui_settings():
         True, "Upscaled swapper sharpen", gr.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("roop_upscaled_swapper_fixcolor", shared.OptionInfo(
         True, "Upscaled swapper color correction", gr.Checkbox, {"interactive": True}, section=section))    
-
-
+    shared.opts.add_option("roop_upscaled_swapper_face_restorer", shared.OptionInfo(
+        None, "Upscaled swapper face restorer", gr.Dropdown, {"interactive": True, "choices" : ["None"] + [x.name() for x in shared.face_restorers]}, section=section))
+    shared.opts.add_option("roop_upscaled_swapper_face_restorer_visibility", shared.OptionInfo(
+        1, "Upscaled swapper face restorer visibility", gr.Slider, {"minimum": 0, "maximum": 1, "step": 0.001}, section=section))
+    shared.opts.add_option("roop_upscaled_swapper_face_restorer_weight", shared.OptionInfo(
+        1, "Upscaled swapper face restorer weight (codeformer)", gr.Slider, {"minimum": 0, "maximum": 1, "step": 0.001}, section=section))
 
 script_callbacks.on_ui_settings(on_ui_settings)
 
