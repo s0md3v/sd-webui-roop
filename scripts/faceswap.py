@@ -7,7 +7,7 @@ from scripts.roop_swapping import swapper
 from scripts.roop_utils import imgutils
 from scripts.roop_utils import models_utils
 from scripts.roop_postprocessing import upscaling
-
+from pprint import pprint
 
 #Reload all the modules when using "apply and restart"
 importlib.reload(swapper)
@@ -324,16 +324,18 @@ class FaceSwapScript(scripts.Script):
 
                 return 
 
-    def process_image_unit(self, unit : FaceSwapUnitSettings, image, info = None) -> Tuple[Optional[Image.Image], Optional[str]]:
+    def process_image_unit(self, unit : FaceSwapUnitSettings, image, info = None) -> List:
+        results = []
         if unit.enable :
             if convert_to_sd(image) :
-                return (image, info)
+                return [(image, info)]
             if not unit.blend_faces :
                 src_faces = unit.faces
                 logger.info(f"will generate {len(src_faces)} images")
             else :
                 logger.info("blend all faces together")
                 src_faces = [unit.blended_faces]
+
             for i,src_face in enumerate(src_faces):
                 logger.info(f"Process face {i}")
                 result: swapper.ImageResult = swapper.swap_face(
@@ -345,13 +347,15 @@ class FaceSwapScript(scripts.Script):
                     same_gender=unit.same_gender,
                     upscaled_swapper=self.upscaled_swapper
                 )
+                if result.image is None :
+                    logger.error("Result image is None")
                 if (not unit.check_similarity) or result.similarity and all([result.similarity.values()!=0]+[x >= unit.min_sim for x in result.similarity.values()]) and all([result.ref_similarity.values()!=0]+[x >= unit.min_ref_sim for x in result.ref_similarity.values()]):
-                    return (result.image, f"{info}, similarity = {result.similarity}, ref_similarity = {result.ref_similarity}")
+                    results.append((result.image, f"{info}, similarity = {result.similarity}, ref_similarity = {result.ref_similarity}"))
                 else:
                     logger.warning(
                         f"skip, similarity to low, sim = {result.similarity} (target {unit.min_sim}) ref sim = {result.ref_similarity} (target = {unit.min_ref_sim})"
                     )
-        return (None, None)
+        return results
 
 
     def process_images_unit(self, unit : FaceSwapUnitSettings, images : List[Image.Image], infos = None) -> Tuple[List[Image.Image], List[str]] :
@@ -361,50 +365,50 @@ class FaceSwapScript(scripts.Script):
             if not infos :
                 infos = [None] * len(images)
             for i, (img, info) in enumerate(zip(images, infos)):
-                (result_image, result_info) = self.process_image_unit(unit, img, info)
-                if result_image is not None and result_info is not None :
+                swapped_images = self.process_image_unit(unit, img, info)
+                for result_image, result_info in swapped_images :
                     result_images.append(result_image)
                     result_infos.append(result_info)
             logger.info(f"{len(result_images)} images processed")
             return (result_images, result_infos)
         return (images, infos)
 
-    def postprocess_image(self, p, script_pp: PostprocessImageArgs, *args):
-        if self.enabled :
-            img : Image.Image = script_pp.image
-            infos = ""
-            if any([u.enable for u in self.units]):
-                for i, unit in enumerate(self.units):
-                    if unit.enable :
-                        img,info = self.process_image_unit(image=img, unit=unit, info="")
-                        logger.info(f"unit {i+1}> processed")
-                        infos += info or ""
-                        if img is None :
-                            logger.error("Failed to process image - Switch back to original image")
-                            img = script_pp.image
-            try :   
-                if self.postprocess_options is not None:
-                    img = enhance_image(img, self.postprocess_options)
-            except Exception as e:
-                logger.error("Failed to upscale : %s", e)
-            pp = scripts_postprocessing.PostprocessedImage(img)
-            pp.info = {"face.similarity" : infos}
-            p.extra_generation_params.update(pp.info)
-            script_pp.image = pp.image
-
     def postprocess(self, p : StableDiffusionProcessing, processed: Processed, *args):
         if self.enabled :
 
-            images = processed.images[processed.index_of_first_image:]
-            for i,img in enumerate(images) :
-                images[i] = processing.apply_overlay(img, p.paste_to, i%p.batch_size, p.overlay_images)
+            orig_images = processed.images[processed.index_of_first_image:]
+            orig_infotexts = processed.infotexts[processed.index_of_first_image:]
 
-            processed.images = images
+            images = []
+            infotexts = []
 
             if self.keep_original_images:
-                if len(self._orig_images)> 1 :
-                    processed.images.append(image_grid(self._orig_images))
-                processed.images += self._orig_images
-                processed.infotexts+= processed.infotexts # duplicate infotexts           
+                images = processed.images
+                infotexts = processed.infotexts
+
+            for i,(img,info) in enumerate(zip(orig_images, orig_infotexts)): 
+                if any([u.enable for u in self.units]):
+                    for unit_i, unit in enumerate(self.units):
+                        if unit.enable :
+                            swapped_images = self.process_image_unit(image=img, unit=unit, info=info)
+                            logger.info(f"{len(swapped_images)} images swapped")
+                            for swp_img, new_info in swapped_images :
+                                logger.info(f"unit {unit_i+1}> processed")
+                                if swp_img is not None :
+                                    swp_img = processing.apply_overlay(swp_img, p.paste_to, i%p.batch_size, p.overlay_images)
+                                    try :   
+                                        if self.postprocess_options is not None:
+                                            swp_img = enhance_image(swp_img, self.postprocess_options)
+                                    except Exception as e:
+                                        logger.error("Failed to upscale : %s", e)
+
+                                    logger.info("Add swp image to processed")
+                                    images.append(swp_img)
+                                    infotexts.append(new_info)
+                                else :
+                                    logger.warning("swp image is None")
+            processed.images = images
+            processed.infotexts = infotexts
+
 
 
