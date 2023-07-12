@@ -1,93 +1,54 @@
-import glob
 import importlib
 from modules.scripts import PostprocessImageArgs,scripts_postprocessing
+from scripts.roop_utils.models_utils import get_models, get_face_checkpoints
 
-from scripts import (cimage, imgutils, roop_logging, roop_version, swapper,
-                     upscaling)
+from scripts import (roop_globals, roop_logging, faceswap_settings, faceswap_tab)
+from scripts.roop_swapping import swapper
+from scripts.roop_utils import imgutils
+from scripts.roop_utils import models_utils
+from scripts.roop_postprocessing import upscaling
+
 
 #Reload all the modules when using "apply and restart"
 importlib.reload(swapper)
 importlib.reload(roop_logging)
-importlib.reload(roop_version)
-importlib.reload(cimage)
+importlib.reload(roop_globals)
 importlib.reload(imgutils)
 importlib.reload(upscaling)
+importlib.reload(faceswap_settings)
+importlib.reload(models_utils)
 
 import base64
 import io
-import json
 import os
-import tempfile
 from dataclasses import dataclass, fields
-from pprint import pformat, pprint
+from pprint import pformat
 from typing import Dict, List, Set, Tuple, Union, Optional
 
-import cv2
 import dill as pickle
 import gradio as gr
 import modules.scripts as scripts
-import numpy as np
-import onnx
-import pandas as pd
+from modules import script_callbacks, scripts
 import torch
 from insightface.app.common import Face
-from modules import processing, script_callbacks, scripts, shared
-from modules.face_restoration import FaceRestoration
+from modules import processing, scripts, shared
 from modules.images import save_image, image_grid
 from modules.processing import (Processed, StableDiffusionProcessing,
-                                StableDiffusionProcessingImg2Img,
-                                StableDiffusionProcessingTxt2Img)
+                                StableDiffusionProcessingImg2Img)
 from modules.shared import cmd_opts, opts, state
-from modules.upscaler import Upscaler, UpscalerData
-from onnx import numpy_helper
 from PIL import Image
 
-from scripts.cimage import convert_to_sd
-from scripts.imgutils import (create_square_image, cv2_to_pil, pil_to_cv2,
-                              pil_to_torch, torch_to_pil)
+from scripts.roop_utils.imgutils import (pil_to_cv2,convert_to_sd)
+
 from scripts.roop_logging import logger
-from scripts.roop_version import version_flag
-from scripts.upscaling import UpscaleOptions, upscale_image
+from scripts.roop_globals import VERSION_FLAG
+from scripts.roop_postprocessing.postprocessing_options import PostProcessingOptions
+from scripts.roop_postprocessing.postprocessing import enhance_image
+
 
 import modules
 
 EXTENSION_PATH=os.path.join("extensions","sd-webui-roop")
-
-def get_models():
-    """
-    Retrieve a list of swap model files.
-
-    This function searches for model files in the specified directories and returns a list of file paths.
-    The supported file extensions are ".onnx".
-
-    Returns:
-        A list of file paths of the model files.
-    """
-    models_path = os.path.join(scripts.basedir(), EXTENSION_PATH, "models", "*")
-    models = glob.glob(models_path)
-
-    # Add an additional models directory and find files in it
-    models_path = os.path.join(scripts.basedir(), "models", "roop", "*")
-    models += glob.glob(models_path)
-
-    # Filter the list to include only files with the supported extensions
-    models = [x for x in models if x.endswith(".onnx")]
-
-    return models
-
-def get_face_checkpoints():
-    """
-    Retrieve a list of face checkpoint paths.
-
-    This function searches for face files with the extension ".pkl" in the specified directory and returns a list
-    containing the paths of those files.
-
-    Returns:
-        list: A list of face paths, including the string "None" as the first element.
-    """
-    faces_path = os.path.join(scripts.basedir(), "models", "roop", "faces", "*.pkl")
-    faces = glob.glob(faces_path)
-    return ["None"] + faces
 
 @dataclass
 class FaceSwapUnitSettings:
@@ -202,310 +163,7 @@ class FaceSwapUnitSettings:
         return self._blended_faces
 
 
-def compare(img1, img2):
-    if img1 is not None and img2 is not None:
-        return swapper.compare_faces(img1, img2)
-
-    return "You need 2 images to compare"
-
-
-
-def extract_faces(files, extract_path,  face_restorer_name, face_restorer_visibility, codeformer_weight,upscaler_name,upscaler_scale, upscaler_visibility,inpainting_denoising_strengh, inpainting_prompt, inpainting_negative_prompt, inpainting_steps, inpainting_sampler,inpainting_when):
-    if not extract_path :
-        tempfile.mkdtemp()
-    if files is not None:
-        images = []
-        for file in files :
-            img = Image.open(file.name).convert("RGB")
-            faces = swapper.get_faces(pil_to_cv2(img))
-            if faces:
-                face_images = []
-                for face in faces:
-                    bbox = face.bbox.astype(int)
-                    x_min, y_min, x_max, y_max = bbox
-                    face_image = img.crop((x_min, y_min, x_max, y_max))
-                    if face_restorer_name or face_restorer_visibility:
-                        scale = 1 if face_image.width > 512 else 512//face_image.width
-                        face_image = upscale_image(face_image, UpscaleOptions(face_restorer_name=face_restorer_name,
-                                                                            restorer_visibility=face_restorer_visibility,
-                                                                            codeformer_weight= codeformer_weight,
-                                                                            upscaler_name=upscaler_name, 
-                                                                            upscale_visibility=upscaler_visibility, 
-                                                                            scale=scale,
-                                                                            inpainting_denoising_strengh=inpainting_denoising_strengh,
-                                                                            inpainting_prompt=inpainting_prompt,
-                                                                            inpainting_steps=inpainting_steps,
-                                                                            inpainting_negative_prompt=inpainting_negative_prompt,
-                                                                            inpainting_when=inpainting_when,
-                                                                            inpainting_sampler=inpainting_sampler))
-                    path = tempfile.NamedTemporaryFile(delete=False,suffix=".png",dir=extract_path).name
-                    face_image.save(path)
-                    face_images.append(path)
-                images+= face_images
-        return images
-    return None
-
-def analyse_faces(image, det_threshold = 0.5) :
-    try :
-        faces = swapper.get_faces(imgutils.pil_to_cv2(image), det_thresh=det_threshold)
-        result = ""
-        for i,face in enumerate(faces) :
-            result+= f"\nFace {i} \n" + "="*40 +"\n"
-            result+= pformat(face) + "\n"
-            result+= "="*40
-        return result
-
-    except Exception as e :
-        logger.error("Analysis Failed : %s", e)
-        return "Analysis Failed"
-    
-def build_face_checkpoint_and_save(batch_files, name):
-    """
-    Builds a face checkpoint, swaps faces, and saves the result to a file.
-
-    Args:
-        batch_files (list): List of image file paths.
-        name (str): Name of the face checkpoint
-
-    Returns:
-        PIL.Image.Image or None: Resulting swapped face image if successful, otherwise None.
-    """
-    batch_files = batch_files or []
-    print("Build", name, [x.name for x in batch_files])
-    faces = swapper.get_faces_from_img_files(batch_files)
-    blended_face = swapper.blend_faces(faces)
-    preview_path = os.path.join(
-        scripts.basedir(), "extensions", "sd-webui-roop", "references"
-    )
-    faces_path = os.path.join(scripts.basedir(), "models", "roop","faces")
-    if not os.path.exists(faces_path):
-        os.makedirs(faces_path)
-
-    target_img = None
-    if blended_face:
-        if blended_face["gender"] == 0:
-            target_img = Image.open(os.path.join(preview_path, "woman.png"))
-        else:
-            target_img = Image.open(os.path.join(preview_path, "man.png"))
-
-        if name == "":
-            name = "default_name"
-        pprint(blended_face)
-        result = swapper.swap_face(blended_face, blended_face, target_img, get_models()[0])
-        result_image = upscale_image(result.image, UpscaleOptions(face_restorer_name="CodeFormer", restorer_visibility=1))
-        
-        file_path = os.path.join(faces_path, f"{name}.pkl")
-        file_number = 1
-        while os.path.exists(file_path):
-            file_path = os.path.join(faces_path, f"{name}_{file_number}.pkl")
-            file_number += 1
-        result_image.save(file_path+".png")
-        with open(file_path, "wb") as file:
-            pickle.dump({"embedding" :blended_face.embedding, "gender" :blended_face.gender, "age" :blended_face.age},file)
-        try :
-            with open(file_path, "rb") as file:
-                data = Face(pickle.load(file))
-                print(data)
-        except Exception as e :
-            print(e)
-        return result_image
-
-    print("No face found")
-
-    return target_img
-
-
-
-
-def explore_onnx_faceswap_model(model_path):
-    data = {
-        'Node Name': [],
-        'Op Type': [],
-        'Inputs': [],
-        'Outputs': [],
-        'Attributes': []
-    }
-    if model_path:
-        model = onnx.load(model_path)
-        for node in model.graph.node:
-            data['Node Name'].append(pformat(node.name))
-            data['Op Type'].append(pformat(node.op_type))
-            data['Inputs'].append(pformat(node.input))
-            data['Outputs'].append(pformat(node.output))
-            attributes = []
-            for attr in node.attribute:
-                attr_name = attr.name
-                attr_value = attr.t
-                attributes.append("{} = {}".format(pformat(attr_name), pformat(attr_value)))
-            data['Attributes'].append(attributes)
-
-    df = pd.DataFrame(data)
-    return df
-
-def upscaler_ui():
-    with gr.Tab(f"Post-Processing"):
-        gr.Markdown(
-                """Upscaling is performed on the whole image. Upscaling happens before face restoration.""")
-        with gr.Row():
-            face_restorer_name = gr.Radio(
-                label="Restore Face",
-                choices=["None"] + [x.name() for x in shared.face_restorers],
-                value=shared.face_restorers[0].name(),
-                type="value",
-            )
-            with gr.Column():
-                face_restorer_visibility = gr.Slider(
-                    0, 1, 1, step=0.001, label="Restore visibility"
-                )
-                codeformer_weight = gr.Slider(
-                    0, 1, 1, step=0.001, label="codeformer weight"
-                )                
-        upscaler_name = gr.inputs.Dropdown(
-            choices=[upscaler.name for upscaler in shared.sd_upscalers],
-            label="Upscaler",
-        )
-        upscaler_scale = gr.Slider(1, 8, 1, step=0.1, label="Upscaler scale")
-        upscaler_visibility = gr.Slider(
-            0, 1, 1, step=0.1, label="Upscaler visibility (if scale = 1)"
-        )
-        with gr.Accordion(f"Post Inpainting (Beta)", open=True):
-            gr.Markdown(
-                """Inpainting sends image to inpainting with a mask on face (once for each faces).""")
-            inpainting_when = gr.Dropdown(choices = [e.value for e in upscaling.InpaintingWhen.__members__.values()],value=[upscaling.InpaintingWhen.BEFORE_RESTORE_FACE.value], label="Enable/When")
-            inpainting_denoising_strength = gr.Slider(
-                0, 1, 0, step=0.01, label="Denoising strenght (will send face to img2img after processing)"
-            )
-
-            inpainting_denoising_prompt = gr.Textbox("Portrait of a [gender]", label="Inpainting prompt use [gender] instead of men or woman")
-            inpainting_denoising_negative_prompt = gr.Textbox("", label="Inpainting negative prompt use [gender] instead of men or woman")
-            with gr.Row():
-                samplers_names = [s.name for s in modules.sd_samplers.all_samplers]
-                inpainting_sampler = gr.Dropdown(
-                        choices=samplers_names,
-                        value=[samplers_names[0]],
-                        label="Inpainting Sampler",
-                    )
-                inpainting_denoising_steps =  gr.Slider(
-                    1, 150, 20, step=1, label="Inpainting steps"
-                )
-                
-    return [
-        face_restorer_name,
-        face_restorer_visibility,
-        codeformer_weight,
-        upscaler_name,
-        upscaler_scale,
-        upscaler_visibility,
-        inpainting_denoising_strength,
-        inpainting_denoising_prompt,
-        inpainting_denoising_negative_prompt,
-        inpainting_denoising_steps,
-        inpainting_sampler,
-        inpainting_when
-    ]
-
-def tools_ui():
-    models = get_models()
-    with gr.Tab("Tools"):
-        with gr.Tab("Build"):
-            gr.Markdown(
-                """Build a face based on a batch list of images. Will blend the resulting face and store the checkpoint in the roop/faces directory.""")
-            with gr.Row():
-                batch_files = gr.components.File(
-                    type="file",
-                    file_count="multiple",
-                    label="Batch Sources Images",
-                    optional=True,
-                )
-                preview = gr.components.Image(type="pil", label="Preview", interactive=False)
-            name = gr.Textbox(
-                value="Face",
-                placeholder="Name of the character",
-                label="Name of the character",
-            )
-            generate_checkpoint_btn = gr.Button("Save")
-        with gr.Tab("Compare"):
-            gr.Markdown(
-                """Give a similarity score between two images (only first face is compared).""")
- 
-            with gr.Row():
-                img1 = gr.components.Image(type="pil", label="Face 1")
-                img2 = gr.components.Image(type="pil", label="Face 2")
-            compare_btn = gr.Button("Compare")
-            compare_result_text = gr.Textbox(
-                interactive=False, label="Similarity", value="0"
-            )
-        with gr.Tab("Extract"):
-            gr.Markdown(
-                """Extract all faces from a batch of images. Will apply enhancement in the tools enhancement tab.""")
-            with gr.Row():
-                extracted_source_files = gr.components.File(
-                    type="file",
-                    file_count="multiple",
-                    label="Batch Sources Images",
-                    optional=True,
-                )
-                extracted_faces =  gr.Gallery(
-                                        label="Extracted faces", show_label=False
-                                    ).style(columns=[2], rows=[2])
-            extract_save_path = gr.Textbox(label="Destination Directory", value="")
-            extract_btn = gr.Button("Extract")
-        with gr.Tab("Explore Model"):
-            model = gr.inputs.Dropdown(
-                choices=models,
-                label="Model not found, please download one and reload automatic 1111",
-            )            
-            explore_btn = gr.Button("Explore")
-            explore_result_text = gr.Dataframe(
-                interactive=False, label="Explored"
-            )
-        with gr.Tab("Analyse Face"):
-            img_to_analyse = gr.components.Image(type="pil", label="Face")
-            analyse_det_threshold = gr.Slider(0.1, 1, 0.5, step=0.01, label="Detection threshold")
-            analyse_btn = gr.Button("Analyse")
-            analyse_results = gr.Textbox(label="Results", interactive=False, value="")
-
-        upscale_options = upscaler_ui()
-
-    explore_btn.click(explore_onnx_faceswap_model, inputs=[model], outputs=[explore_result_text])  
-    compare_btn.click(compare, inputs=[img1, img2], outputs=[compare_result_text])
-    generate_checkpoint_btn.click(build_face_checkpoint_and_save, inputs=[batch_files, name], outputs=[preview])
-    extract_btn.click(extract_faces, inputs=[extracted_source_files, extract_save_path]+upscale_options, outputs=[extracted_faces])  
-    analyse_btn.click(analyse_faces, inputs=[img_to_analyse,analyse_det_threshold], outputs=[analyse_results])  
-
-def on_ui_tabs() :
-    with gr.Blocks(analytics_enabled=False) as ui_faceswap:
-        tools_ui()
-    return [(ui_faceswap, "Roop", "roop_tab")] 
-
-script_callbacks.on_ui_tabs(on_ui_tabs)
-
-
-def on_ui_settings():
-    section = ('roop', "Roop")
-    models = get_models()
-    shared.opts.add_option("roop_model", shared.OptionInfo(
-        models[0] if len(models) > 0 else "None",  "Roop FaceSwap Model", gr.Dropdown, {"interactive": True, "choices" : models}, section=section)) 
-    shared.opts.add_option("roop_keep_original", shared.OptionInfo(
-        False, "keep original image before swapping", gr.Checkbox, {"interactive": True}, section=section))               
-    shared.opts.add_option("roop_units_count", shared.OptionInfo(
-        3, "Max faces units (requires restart)", gr.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
-    shared.opts.add_option("roop_upscaled_swapper", shared.OptionInfo(
-        False, "Upscaled swapper", gr.Checkbox, {"interactive": True}, section=section))
-    shared.opts.add_option("roop_upscaled_swapper_upscaler", shared.OptionInfo(
-        None, "Upscaled swapper upscaler (Recommanded : LDSR)", gr.Dropdown, {"interactive": True, "choices" : [upscaler.name for upscaler in shared.sd_upscalers]}, section=section))
-    shared.opts.add_option("roop_upscaled_swapper_sharpen", shared.OptionInfo(
-        True, "Upscaled swapper sharpen", gr.Checkbox, {"interactive": True}, section=section))
-    shared.opts.add_option("roop_upscaled_swapper_fixcolor", shared.OptionInfo(
-        True, "Upscaled swapper color correction", gr.Checkbox, {"interactive": True}, section=section))    
-    shared.opts.add_option("roop_upscaled_swapper_face_restorer", shared.OptionInfo(
-        None, "Upscaled swapper face restorer", gr.Dropdown, {"interactive": True, "choices" : ["None"] + [x.name() for x in shared.face_restorers]}, section=section))
-    shared.opts.add_option("roop_upscaled_swapper_face_restorer_visibility", shared.OptionInfo(
-        1, "Upscaled swapper face restorer visibility", gr.Slider, {"minimum": 0, "maximum": 1, "step": 0.001}, section=section))
-    shared.opts.add_option("roop_upscaled_swapper_face_restorer_weight", shared.OptionInfo(
-        1, "Upscaled swapper face restorer weight (codeformer)", gr.Slider, {"minimum": 0, "maximum": 1, "step": 0.001}, section=section))
-
-script_callbacks.on_ui_settings(on_ui_settings)
+script_callbacks.on_ui_tabs(faceswap_tab.on_ui_tabs)
 
 
 class FaceSwapScript(scripts.Script):
@@ -520,7 +178,7 @@ class FaceSwapScript(scripts.Script):
 
     @property
     def enabled(self) :
-        return any([u.enable for u in self.units])
+        return any([u.enable for u in self.units]) and not shared.state.interrupted
 
     @property
     def model(self) :
@@ -619,11 +277,11 @@ class FaceSwapScript(scripts.Script):
         ]
 
     def ui(self, is_img2img):
-        with gr.Accordion(f"Roop {version_flag}", open=False):
+        with gr.Accordion(f"Roop {VERSION_FLAG}", open=False):
             components = []
             for i in range(1, self.units_count + 1):
                 components += self.faceswap_unit_ui(is_img2img, i)
-            upscaler = upscaler_ui()
+            upscaler = faceswap_tab.upscaler_ui()
         return components + upscaler
 
     def before_process(self, p: StableDiffusionProcessing, *components):
@@ -636,10 +294,10 @@ class FaceSwapScript(scripts.Script):
 
         len_conf: int = len(fields(FaceSwapUnitSettings))
         shift: int = self.units_count * len_conf
-        self.upscale_options = UpscaleOptions(
-            *components[shift : shift + len(fields(UpscaleOptions))]
+        self.postprocess_options = PostProcessingOptions(
+            *components[shift : shift + len(fields(PostProcessingOptions))]
         )
-        logger.debug("%s", pformat(self.upscale_options))
+        logger.debug("%s", pformat(self.postprocess_options))
 
 
         if isinstance(p, StableDiffusionProcessingImg2Img):
@@ -652,6 +310,19 @@ class FaceSwapScript(scripts.Script):
 
                 p.init_images = init_images
 
+
+    def postprocess_batch(self, p, *args, **kwargs):
+        if self.enabled :
+            if self.keep_original_images:
+                batch_index = kwargs.pop('batch_number', 0)
+                torch_images : torch.Tensor = kwargs["images"]
+                pil_images = imgutils.torch_to_pil(torch_images)
+                self._orig_images = pil_images
+                for img in pil_images :
+                    if p.outpath_samples and opts.samples_save :
+                        save_image(img, p.outpath_samples, "", p.seeds[batch_index], p.prompts[batch_index], opts.samples_format, p=p, suffix="-before-swap")
+
+                return 
 
     def process_image_unit(self, unit : FaceSwapUnitSettings, image, info = None) -> Tuple[Optional[Image.Image], Optional[str]]:
         if unit.enable :
@@ -682,20 +353,7 @@ class FaceSwapScript(scripts.Script):
                     )
         return (None, None)
 
-    def postprocess_batch(self, p, *args, **kwargs):
-        if self.enabled :
-            if self.keep_original_images:
-                batch_index = kwargs.pop('batch_number', 0)
-                torch_images = kwargs["images"]
-                pil_images = imgutils.torch_to_pil(torch_images)
-                
-                self._orig_images = pil_images
-                for img in pil_images :
-                    if p.outpath_samples and opts.samples_save :
-                        save_image(img, p.outpath_samples, "", p.seeds[batch_index], p.prompts[batch_index], opts.samples_format, p=p, suffix="-before-swap")
-                    
-                return 
-    
+
     def process_images_unit(self, unit : FaceSwapUnitSettings, images : List[Image.Image], infos = None) -> Tuple[List[Image.Image], List[str]] :
         if unit.enable :
             result_images : List[Image.Image] = []
@@ -725,8 +383,8 @@ class FaceSwapScript(scripts.Script):
                             logger.error("Failed to process image - Switch back to original image")
                             img = script_pp.image
             try :   
-                if self.upscale_options is not None:
-                    img = upscale_image(img, self.upscale_options)
+                if self.postprocess_options is not None:
+                    img = enhance_image(img, self.postprocess_options)
             except Exception as e:
                 logger.error("Failed to upscale : %s", e)
             pp = scripts_postprocessing.PostprocessedImage(img)
@@ -736,6 +394,13 @@ class FaceSwapScript(scripts.Script):
 
     def postprocess(self, p : StableDiffusionProcessing, processed: Processed, *args):
         if self.enabled :
+
+            images = processed.images[processed.index_of_first_image:]
+            for i,img in enumerate(images) :
+                images[i] = processing.apply_overlay(img, p.paste_to, i%p.batch_size, p.overlay_images)
+
+            processed.images = images
+
             if self.keep_original_images:
                 if len(self._orig_images)> 1 :
                     processed.images.append(image_grid(self._orig_images))

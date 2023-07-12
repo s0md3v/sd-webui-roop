@@ -7,14 +7,13 @@ from typing import Dict, List, Set, Tuple, Union
 import cv2
 import insightface
 import numpy as np
-import onnxruntime
 from insightface.app.common import Face
 
 from PIL import Image
 from sklearn.metrics.pairwise import cosine_similarity
 
-from scripts import upscaled_inswapper
-from scripts.imgutils import cv2_to_pil, pil_to_cv2
+from scripts.roop_swapping import upscaled_inswapper
+from scripts.roop_utils.imgutils import cv2_to_pil, pil_to_cv2
 from scripts.roop_logging import logger
 
 providers = ["CPUExecutionProvider"]

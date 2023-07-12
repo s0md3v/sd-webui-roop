@@ -2,6 +2,16 @@ from PIL import Image
 import cv2
 import numpy as np
 from math import isqrt, ceil
+import torch
+from ifnude import detect
+from scripts.roop_globals import SD_CONVERT_SCORE
+
+def convert_to_sd(img):
+    shapes = []
+    chunks = detect(img)
+    for chunk in chunks:
+        shapes.append(chunk["score"] > SD_CONVERT_SCORE)
+    return any(shapes)
 
 def pil_to_cv2(pil_img):
     return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
@@ -9,8 +19,6 @@ def pil_to_cv2(pil_img):
 
 def cv2_to_pil(cv2_img):
     return Image.fromarray(cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB))
-
-
 
 def torch_to_pil(images):
     """
@@ -36,7 +44,6 @@ def pil_to_torch(pil_images):
     numpy_image = np.array(pil_images)
     torch_image = torch.from_numpy(numpy_image).permute(2, 0, 1)
     return torch_image
-
 
 from collections import Counter
 def create_square_image(image_list):
@@ -89,3 +96,15 @@ def create_square_image(image_list):
     
     # Return None if there are no images or only one image in the image_list
     return None
+
+def create_mask(image, box_coords):
+    width, height = image.size
+    mask = Image.new("L", (width, height), 255)
+    x1, y1, x2, y2 = box_coords
+    for x in range(width):
+        for y in range(height):
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                mask.putpixel((x, y), 255)
+            else:
+                mask.putpixel((x, y), 0)
+    return mask
