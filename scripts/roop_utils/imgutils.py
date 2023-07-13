@@ -5,6 +5,8 @@ from math import isqrt, ceil
 import torch
 from ifnude import detect
 from scripts.roop_globals import SD_CONVERT_SCORE
+from modules import processing
+
 
 def convert_to_sd(img):
     shapes = []
@@ -108,3 +110,20 @@ def create_mask(image, box_coords):
             else:
                 mask.putpixel((x, y), 0)
     return mask
+
+def apply_mask(img : Image.Image,p : processing.StableDiffusionProcessing, batch_index : int) -> Image.Image :
+    """
+    Apply mask overlay and color correction to an image if enabled
+    
+    Args:
+        img: PIL Image objects.
+        p : The processing object
+        batch_index : the batch index
+        
+    Returns:
+        PIL Image object
+    """
+    img = processing.apply_overlay(img, p.paste_to, batch_index, p.overlay_images)
+    if p.color_corrections is not None and batch_index < len(p.color_corrections):
+        img = processing.apply_color_correction(p.color_corrections[batch_index], img)        
+    return img

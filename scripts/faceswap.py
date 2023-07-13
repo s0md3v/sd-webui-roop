@@ -1,8 +1,7 @@
 import importlib
-from modules.scripts import PostprocessImageArgs,scripts_postprocessing
 from scripts.roop_utils.models_utils import get_models, get_face_checkpoints
 
-from scripts import (roop_globals, roop_logging, faceswap_settings, faceswap_tab)
+from scripts import (roop_globals, roop_logging, faceswap_settings, faceswap_tab, faceswap_unit_ui)
 from scripts.roop_swapping import swapper
 from scripts.roop_utils import imgutils
 from scripts.roop_utils import models_utils
@@ -10,6 +9,7 @@ from scripts.roop_postprocessing import upscaling
 from pprint import pprint
 
 #Reload all the modules when using "apply and restart"
+#This is mainly done for development purposes
 importlib.reload(swapper)
 importlib.reload(roop_logging)
 importlib.reload(roop_globals)
@@ -17,6 +17,7 @@ importlib.reload(imgutils)
 importlib.reload(upscaling)
 importlib.reload(faceswap_settings)
 importlib.reload(models_utils)
+importlib.reload(faceswap_unit_ui)
 
 import base64
 import io
@@ -29,13 +30,12 @@ import dill as pickle
 import gradio as gr
 import modules.scripts as scripts
 from modules import script_callbacks, scripts
-import torch
 from insightface.app.common import Face
-from modules import processing, scripts, shared
+from modules import scripts, shared
 from modules.images import save_image, image_grid
 from modules.processing import (Processed, StableDiffusionProcessing,
                                 StableDiffusionProcessingImg2Img)
-from modules.shared import cmd_opts, opts, state
+from modules.shared import opts
 from PIL import Image
 
 from scripts.roop_utils.imgutils import (pil_to_cv2,convert_to_sd)
@@ -44,9 +44,6 @@ from scripts.roop_logging import logger
 from scripts.roop_globals import VERSION_FLAG
 from scripts.roop_postprocessing.postprocessing_options import PostProcessingOptions
 from scripts.roop_postprocessing.postprocessing import enhance_image
-
-
-import modules
 
 EXTENSION_PATH=os.path.join("extensions","sd-webui-roop")
 
@@ -162,26 +159,35 @@ class FaceSwapUnitSettings:
             self._blended_faces = swapper.blend_faces(self.faces)
         return self._blended_faces
 
-
+# Register the tab, done here to prevent it from being added twice
 script_callbacks.on_ui_tabs(faceswap_tab.on_ui_tabs)
 
 
 class FaceSwapScript(scripts.Script):
+
+    def __init__(self) -> None:
+        logger.info(f"Roop {VERSION_FLAG}")
+        super().__init__()
 
     @property
     def units_count(self) :
         return opts.data.get("roop_units_count", 3)
     
     @property
-    def upscaled_swapper(self) :
+    def upscaled_swapper_in_generated(self) :
         return opts.data.get("roop_upscaled_swapper", False)
-
+    
     @property
-    def enabled(self) :
+    def upscaled_swapper_in_source(self) :
+        return opts.data.get("roop_upscaled_swapper_in_source", False)
+    
+    @property
+    def enabled(self) -> bool :
+        """Return True if any unit is enabled and the state is not interupted"""
         return any([u.enable for u in self.units]) and not shared.state.interrupted
 
     @property
-    def model(self) :
+    def model(self) -> str :
         model = opts.data.get("roop_model", None)
         if model is None :
             models = get_models()
@@ -202,96 +208,45 @@ class FaceSwapScript(scripts.Script):
     def show(self, is_img2img):
         return scripts.AlwaysVisible
 
-    def faceswap_unit_ui(self, is_img2img, unit_num=1):
-        with gr.Tab(f"Face {unit_num}"):
-            with gr.Column():
-                gr.Markdown(
-                """Reference is an image. First face will be extracted. 
-                First face of batches sources will be extracted and used as input (or blended if blend is activated).""")
-                with gr.Row():
-                    img = gr.components.Image(type="pil", label="Reference")
-                    batch_files = gr.components.File(
-                        type="file",
-                        file_count="multiple",
-                        label="Batch Sources Images",
-                        optional=True,
-                    )
-                gr.Markdown(
-                    """Face checkpoint built with the checkpoint builder in tools. Will overwrite reference image.""")     
-                with gr.Row() :
-               
-                    face = gr.inputs.Dropdown(
-                        choices=get_face_checkpoints(),
-                        label="Face Checkpoint (precedence over reference face)",
-                    )
-                    refresh = gr.Button(value='↻', variant='tool')
-                    def refresh_fn(selected):
-                        return gr.Dropdown.update(value=selected, choices=get_face_checkpoints())
-                    refresh.click(fn=refresh_fn,inputs=face, outputs=face)
 
-                with gr.Row():
-                    enable = gr.Checkbox(False, placeholder="enable", label="Enable")
-                    same_gender = gr.Checkbox(
-                        False, placeholder="Same Gender", label="Same Gender"
-                    )
-                    blend_faces = gr.Checkbox(
-                        True, placeholder="Blend Faces", label="Blend Faces ((Source|Checkpoint)+References = 1)"
-                    )
-                gr.Markdown("""Discard images with low similarity or no faces :""")
-                check_similarity = gr.Checkbox(False, placeholder="discard", label="Check similarity")        
-                min_sim = gr.Slider(0, 1, 0, step=0.01, label="Min similarity")
-                min_ref_sim = gr.Slider(
-                    0, 1, 0, step=0.01, label="Min reference similarity"
-                )
-                faces_index = gr.Textbox(
-                    value="0",
-                    placeholder="Which face to swap (comma separated), start from 0 (by gender if same_gender is enabled)",
-                    label="Comma separated face number(s)",
-                )
-                gr.Markdown("""Configure swapping. Swapping can occure before img2img, after or both :""", visible=is_img2img)        
-                swap_in_source = gr.Checkbox(
-                    False,
-                    placeholder="Swap face in source image",
-                    label="Swap in source image (must be blended)",
-                    visible=is_img2img,
-                )
-                swap_in_generated = gr.Checkbox(
-                    True,
-                    placeholder="Swap face in generated image",
-                    label="Swap in generated image",
-                    visible=is_img2img,
-                )
-        return [
-            img,
-            face,
-            batch_files,
-            blend_faces,
-            enable,
-            same_gender,
-            check_similarity,
-            min_sim,
-            min_ref_sim,
-            faces_index,
-            swap_in_source,
-            swap_in_generated,
-        ]
+    # def after_component(self, component, **kwargs):
+    #     def update_default(component, elem_id, option_name ) :
+    #         if hasattr(component, "elem_id") :
+    #             id = component.elem_id
+    #             if id == elem_id :
+    #                 component.update(value = opts.data.get(option_name, component.value))           
+        
+    #     if hasattr(component, "elem_id") :
+    #         update_default(component, "roop_pp_face_restorer","roop_pp_default_face_restorer")
+    #         update_default(component, "roop_pp_face_restorer_visibility","roop_pp_default_face_restorer_visibility")
+    #         update_default(component, "roop_pp_face_restorer_weight","roop_pp_default_face_restorer_weight")
+    #         update_default(component, "roop_pp_upscaler","roop_pp_default_upscaler")
+    #         update_default(component, "roop_pp_upscaler_visibility","roop_pp_default_upscaler_visibility")
 
     def ui(self, is_img2img):
         with gr.Accordion(f"Roop {VERSION_FLAG}", open=False):
             components = []
             for i in range(1, self.units_count + 1):
-                components += self.faceswap_unit_ui(is_img2img, i)
+                components += faceswap_unit_ui.faceswap_unit_ui(is_img2img, i)
             upscaler = faceswap_tab.upscaler_ui()
+        # If the order is modified, the before_process should be changed accordingly.
         return components + upscaler
 
     def before_process(self, p: StableDiffusionProcessing, *components):
+        # The order of processing for the components is important
+        # The method first process faceswap units then postprocessing units 
+
         self.units: List[FaceSwapUnitSettings] = []
+        
+        #Parse and convert units flat components into FaceSwapUnitSettings
         for i in range(0, self.units_count):
             self.units += [FaceSwapUnitSettings.get_unit_configuration(i, components)]
 
         for i, u in enumerate(self.units):
             logger.debug("%s, %s", pformat(i), pformat(u))
 
+        #Parse the postprocessing options
+        #We must first find where to start from (after face swapping units) 
         len_conf: int = len(fields(FaceSwapUnitSettings))
         shift: int = self.units_count * len_conf
         self.postprocess_options = PostProcessingOptions(
@@ -299,32 +254,38 @@ class FaceSwapScript(scripts.Script):
         )
         logger.debug("%s", pformat(self.postprocess_options))
 
-
+        #If is instance of img2img, we check if face swapping in source is required.
         if isinstance(p, StableDiffusionProcessingImg2Img):
-            if any([u.enable for u in self.units]):
+            if self.enabled:
                 init_images = p.init_images
                 for i, unit in enumerate(self.units):
                     if unit.enable and unit.swap_in_source :
-                        (init_images, result_infos) = self.process_images_unit(unit, init_images)
+                        blend_config = unit.blend_faces # store blend config
+                        unit.blend_faces = True # force blending
+                        (init_images, result_infos) = self.process_images_unit(unit, init_images, upscaled_swapper=self.upscaled_swapper_in_source)
                         logger.info(f"unit {i+1}> processed init images: {len(init_images)}, {len(result_infos)}")
+                        unit.blend_faces = blend_config #restore blend config
 
                 p.init_images = init_images
 
+                # Apply mask :
+                for i,img in enumerate(p.init_images) :
+                    p.init_images[i] = imgutils.apply_mask(img, p, i)
+                        
 
-    def postprocess_batch(self, p, *args, **kwargs):
-        if self.enabled :
-            if self.keep_original_images:
-                batch_index = kwargs.pop('batch_number', 0)
-                torch_images : torch.Tensor = kwargs["images"]
-                pil_images = imgutils.torch_to_pil(torch_images)
-                self._orig_images = pil_images
-                for img in pil_images :
-                    if p.outpath_samples and opts.samples_save :
-                        save_image(img, p.outpath_samples, "", p.seeds[batch_index], p.prompts[batch_index], opts.samples_format, p=p, suffix="-before-swap")
 
-                return 
+    def process_image_unit(self, unit : FaceSwapUnitSettings, image: Image.Image, info = None, upscaled_swapper = False) -> List:
+        """Process one image and return a List of (image, info) (one if blended, many if not).
 
-    def process_image_unit(self, unit : FaceSwapUnitSettings, image, info = None) -> List:
+        Args:
+            unit : the current unit
+            image : the image where to apply swapping
+            info : The info
+
+        Returns:
+            List of tuple of (image, info) where image is the image where swapping has been applied and info is the image info with similarity infos.
+        """
+
         results = []
         if unit.enable :
             if convert_to_sd(image) :
@@ -345,7 +306,7 @@ class FaceSwapScript(scripts.Script):
                     faces_index=unit.faces_index,
                     model=self.model,
                     same_gender=unit.same_gender,
-                    upscaled_swapper=self.upscaled_swapper
+                    upscaled_swapper=upscaled_swapper
                 )
                 if result.image is None :
                     logger.error("Result image is None")
@@ -357,15 +318,16 @@ class FaceSwapScript(scripts.Script):
                     )
         return results
 
-
-    def process_images_unit(self, unit : FaceSwapUnitSettings, images : List[Image.Image], infos = None) -> Tuple[List[Image.Image], List[str]] :
+    def process_images_unit(self, unit : FaceSwapUnitSettings, images : List[Image.Image], infos = None, upscaled_swapper = False) -> Tuple[List[Image.Image], List[str]] :
         if unit.enable :
             result_images : List[Image.Image] = []
             result_infos : List[str]= []
             if not infos :
+                # this allows the use of zip afterwards if no infos are present
+                # we make sure infos size is the same as images size
                 infos = [None] * len(images)
             for i, (img, info) in enumerate(zip(images, infos)):
-                swapped_images = self.process_image_unit(unit, img, info)
+                swapped_images = self.process_image_unit(unit, img, info, upscaled_swapper)
                 for result_image, result_info in swapped_images :
                     result_images.append(result_image)
                     result_infos.append(result_info)
@@ -375,40 +337,62 @@ class FaceSwapScript(scripts.Script):
 
     def postprocess(self, p : StableDiffusionProcessing, processed: Processed, *args):
         if self.enabled :
-
+            # Get the original images without the grid
             orig_images = processed.images[processed.index_of_first_image:]
             orig_infotexts = processed.infotexts[processed.index_of_first_image:]
 
+            # These are were images and infos of swapped images will be stored
             images = []
             infotexts = []
 
             if self.keep_original_images:
+                # If we want to keep original images, we add all existing (including grid this time)
                 images = processed.images
                 infotexts = processed.infotexts
 
             for i,(img,info) in enumerate(zip(orig_images, orig_infotexts)): 
                 if any([u.enable for u in self.units]):
                     for unit_i, unit in enumerate(self.units):
+                        #convert image position to batch index
+                        #this should work (not completely confident)
+                        batch_index = i%p.batch_size
                         if unit.enable :
-                            swapped_images = self.process_image_unit(image=img, unit=unit, info=info)
-                            logger.info(f"{len(swapped_images)} images swapped")
-                            for swp_img, new_info in swapped_images :
-                                logger.info(f"unit {unit_i+1}> processed")
-                                if swp_img is not None :
-                                    swp_img = processing.apply_overlay(swp_img, p.paste_to, i%p.batch_size, p.overlay_images)
-                                    try :   
-                                        if self.postprocess_options is not None:
-                                            swp_img = enhance_image(swp_img, self.postprocess_options)
-                                    except Exception as e:
-                                        logger.error("Failed to upscale : %s", e)
+                            if unit.swap_in_generated :
+                                swapped_images = self.process_image_unit(image=img, unit=unit, info=info, upscaled_swapper=self.upscaled_swapper_in_generated)
+                                logger.info(f"{len(swapped_images)} images swapped")
+                                for swp_img, new_info in swapped_images :
+                                    logger.info(f"unit {unit_i+1}> processed")
+                                    if swp_img is not None :
+                                        swp_img = imgutils.apply_mask(swp_img, p, batch_index)
+                                        try :   
+                                            if self.postprocess_options is not None:
+                                                swp_img = enhance_image(swp_img, self.postprocess_options)
+                                        except Exception as e:
+                                            logger.error("Failed to upscale : %s", e)
 
-                                    logger.info("Add swp image to processed")
-                                    images.append(swp_img)
-                                    infotexts.append(new_info)
-                                else :
-                                    logger.warning("swp image is None")
+                                        logger.info("Add swp image to processed")
+                                        images.append(swp_img)
+                                        infotexts.append(new_info)
+                                        if p.outpath_samples and opts.samples_save :
+                                            save_image(swp_img, p.outpath_samples, "", p.seeds[batch_index], p.prompts[batch_index], opts.samples_format, p=p, suffix="-swapped")      
+                                    else :
+                                        logger.error("swp image is None")
+                            elif unit.swap_in_source and not self.keep_original_images :
+                                # if images were swapped in source, but we don't keep original
+                                # no images will be showned unless we add it as a swap image :
+                                images.append(img)
+                                infotexts.append(new_info)
+
+            # Generate grid :
+            if opts.return_grid and len(images) > 1:
+                # FIXME :Use sd method, not that if blended is not active, the result will be a bit messy.
+                grid = image_grid(images, p.batch_size)
+                text = processed.infotexts[0]
+                infotexts.insert(0, text)
+                if opts.enable_pnginfo:
+                    grid.info["parameters"] = text
+                images.insert(0, grid)
+
+
             processed.images = images
             processed.infotexts = infotexts
-
-
-

@@ -173,24 +173,32 @@ def tools_ui():
                     file_count="multiple",
                     label="Batch Sources Images",
                     optional=True,
+                    elem_id="roop_build_batch_files"
                 )
-                preview = gr.components.Image(type="pil", label="Preview", interactive=False)
+                preview = gr.components.Image(type="pil", label="Preview", interactive=False, elem_id="roop_build_preview_face")
             name = gr.Textbox(
                 value="Face",
                 placeholder="Name of the character",
                 label="Name of the character",
+                elem_id="roop_build_character_name"
             )
-            generate_checkpoint_btn = gr.Button("Save")
+            generate_checkpoint_btn = gr.Button("Save",elem_id="roop_build_save_btn")
         with gr.Tab("Compare"):
             gr.Markdown(
                 """Give a similarity score between two images (only first face is compared).""")
  
             with gr.Row():
-                img1 = gr.components.Image(type="pil", label="Face 1")
-                img2 = gr.components.Image(type="pil", label="Face 2")
-            compare_btn = gr.Button("Compare")
+                img1 = gr.components.Image(type="pil",
+                                        label="Face 1",
+                                        elem_id="roop_compare_face1"
+                )
+                img2 = gr.components.Image(type="pil",
+                                        label="Face 2",
+                                        elem_id="roop_compare_face2"
+                )
+            compare_btn = gr.Button("Compare",elem_id="roop_compare_btn")
             compare_result_text = gr.Textbox(
-                interactive=False, label="Similarity", value="0"
+                interactive=False, label="Similarity", value="0", elem_id="roop_compare_result"
             )
         with gr.Tab("Extract"):
             gr.Markdown(
@@ -201,26 +209,30 @@ def tools_ui():
                     file_count="multiple",
                     label="Batch Sources Images",
                     optional=True,
+                    elem_id="roop_extract_batch_images"
                 )
                 extracted_faces =  gr.Gallery(
-                                        label="Extracted faces", show_label=False
+                                        label="Extracted faces", show_label=False,
+                                        elem_id="roop_extract_results"
                                     ).style(columns=[2], rows=[2])
-            extract_save_path = gr.Textbox(label="Destination Directory", value="")
-            extract_btn = gr.Button("Extract")
+            extract_save_path = gr.Textbox(label="Destination Directory", value="", elem_id="roop_extract_destination")
+            extract_btn = gr.Button("Extract", elem_id="roop_extract_btn")
         with gr.Tab("Explore Model"):
-            model = gr.inputs.Dropdown(
+            model = gr.Dropdown(
                 choices=models,
                 label="Model not found, please download one and reload automatic 1111",
+                elem_id="roop_explore_model"
             )            
-            explore_btn = gr.Button("Explore")
+            explore_btn = gr.Button("Explore", elem_id="roop_explore_btn")
             explore_result_text = gr.Dataframe(
-                interactive=False, label="Explored"
+                interactive=False, label="Explored",
+                elem_id="roop_explore_result"
             )
         with gr.Tab("Analyse Face"):
-            img_to_analyse = gr.components.Image(type="pil", label="Face")
-            analyse_det_threshold = gr.Slider(0.1, 1, 0.5, step=0.01, label="Detection threshold")
-            analyse_btn = gr.Button("Analyse")
-            analyse_results = gr.Textbox(label="Results", interactive=False, value="")
+            img_to_analyse = gr.components.Image(type="pil", label="Face", elem_id="roop_analyse_face")
+            analyse_det_threshold = gr.Slider(0.1, 1, 0.5, step=0.01, label="Detection threshold", elem_id="roop_analyse_det_threshold")
+            analyse_btn = gr.Button("Analyse", elem_id="roop_analyse_btn")
+            analyse_results = gr.Textbox(label="Results", interactive=False, value="", elem_id="roop_analyse_results")
 
         upscale_options = upscaler_ui()
 

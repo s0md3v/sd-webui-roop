@@ -63,14 +63,30 @@ class UpscaledINSwapper():
             if not paste_back:
                 return bgr_fake, M
             else:
+                target_img = img
+
+                def compute_diff(bgr_fake,aimg) :
+                    fake_diff = bgr_fake.astype(np.float32) - aimg.astype(np.float32)
+                    fake_diff = np.abs(fake_diff).mean(axis=2)
+                    fake_diff[:2,:] = 0
+                    fake_diff[-2:,:] = 0
+                    fake_diff[:,:2] = 0
+                    fake_diff[:,-2:] = 0
+                    return fake_diff
+
                 if upscale :
                     print("*"*80)
                     print(f"Upscaled inswapper using {opts.data.get('roop_upscaled_swapper_upscaler', 'LDSR')}")
                     print("*"*80)
                     k = 4
                     aimg, M = face_align.norm_crop2(img, target_face.kps, self.input_size[0]*k)                
+                   
+                    # upscale and restore face :
                     bgr_fake = self.super_resolution(bgr_fake, k)
                     
+                    # compute fake_diff before sharpen and color correction (better result)
+                    fake_diff = compute_diff(bgr_fake, aimg)
+
                     if opts.data.get("roop_upscaled_swapper_sharpen", True) :
                         print("sharpen")
                         # Add sharpness
@@ -83,15 +99,8 @@ class UpscaledINSwapper():
                         correction = processing.setup_color_correction(cv2_to_pil(aimg))
                         bgr_fake_pil = processing.apply_color_correction(correction, cv2_to_pil(bgr_fake))
                         bgr_fake = pil_to_cv2(bgr_fake_pil)
-
-                target_img = img
-                fake_diff = bgr_fake.astype(np.float32) - aimg.astype(np.float32)
-                fake_diff = np.abs(fake_diff).mean(axis=2)
-                fake_diff[:2,:] = 0
-                fake_diff[-2:,:] = 0
-                fake_diff[:,:2] = 0
-                fake_diff[:,-2:] = 0
-                
+                else :
+                    fake_diff = compute_diff(bgr_fake, aimg)
 
                 IM = cv2.invertAffineTransform(M)
 
@@ -100,7 +109,8 @@ class UpscaledINSwapper():
                 img_white = cv2.warpAffine(img_white, IM, (target_img.shape[1], target_img.shape[0]), borderValue=0.0)
                 fake_diff = cv2.warpAffine(fake_diff, IM, (target_img.shape[1], target_img.shape[0]), borderValue=0.0)
                 img_white[img_white>20] = 255
-                fthresh = 10
+                fthresh = opts.data.get('roop_upscaled_swapper_fthresh', 10)
+                print("fthresh", fthresh)
                 fake_diff[fake_diff<fthresh] = 0
                 fake_diff[fake_diff>=fthresh] = 255
                 img_mask = img_white
@@ -108,19 +118,20 @@ class UpscaledINSwapper():
                 mask_h = np.max(mask_h_inds) - np.min(mask_h_inds)
                 mask_w = np.max(mask_w_inds) - np.min(mask_w_inds)
                 mask_size = int(np.sqrt(mask_h*mask_w))
-                k = max(mask_size//10, 10)
+                erosion_factor = opts.data.get('roop_upscaled_swapper_erosion', 1)
+                k = max(int(mask_size//10*erosion_factor), int(10*erosion_factor))
 
                 kernel = np.ones((k,k),np.uint8)
                 img_mask = cv2.erode(img_mask,kernel,iterations = 1)
                 kernel = np.ones((2,2),np.uint8)
                 fake_diff = cv2.dilate(fake_diff,kernel,iterations = 1)
-                k = max(mask_size//20, 5)
+                k = max(int(mask_size//20*erosion_factor), int(5*erosion_factor))
 
 
                 kernel_size = (k, k)
                 blur_size = tuple(2*i+1 for i in kernel_size)
                 img_mask = cv2.GaussianBlur(img_mask, blur_size, 0)
-                k = 5
+                k = int(5*erosion_factor)
                 kernel_size = (k, k)
                 blur_size = tuple(2*i+1 for i in kernel_size)
                 fake_diff = cv2.GaussianBlur(fake_diff, blur_size, 0)
