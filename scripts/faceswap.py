@@ -117,7 +117,7 @@ class FaceSwapUnitSettings:
         Reference face is the checkpoint or the source image or the first image in the batch in that order.
         """
         if not hasattr(self,"_reference_face") :
-            if self.source_face is not None and self.source_face != "None" :
+            if self.source_face and self.source_face != "None" :
                 with open(self.source_face, "rb") as file:
                     try :
                         logger.info(f"loading pickle {file.name}")

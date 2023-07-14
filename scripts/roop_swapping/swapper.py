@@ -15,6 +15,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scripts.roop_swapping import upscaled_inswapper
 from scripts.roop_utils.imgutils import cv2_to_pil, pil_to_cv2
 from scripts.roop_logging import logger
+from scripts import roop_globals
 from modules.shared import opts
 
 providers = ["CPUExecutionProvider"]
@@ -92,10 +93,13 @@ def getAnalysisModel():
     # Check if the analysis model has been initialized
     if ANALYSIS_MODEL is None:
         try :
+            if not os.path.exists(roop_globals.ANALYZER_DIR):
+                os.makedirs(roop_globals.ANALYZER_DIR)
+
             logger.info("Load analysis model, will take some time.")
             # Initialize the analysis model with the specified name and providers
             ANALYSIS_MODEL = insightface.app.FaceAnalysis(
-                name="buffalo_l", providers=providers
+                name="buffalo_l", providers=providers, root=roop_globals.ANALYZER_DIR
             )
         except Exception as e :
             logger.error("Loading of swapping model failed, please check the requirements (On Windows, download and install Visual Studio. During the install, make sure to include the Python and C++ packages.)")
