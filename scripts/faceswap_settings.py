@@ -11,7 +11,12 @@ def on_ui_settings():
         False, "keep original image before swapping", gr.Checkbox, {"interactive": True}, section=section))               
     shared.opts.add_option("roop_units_count", shared.OptionInfo(
         3, "Max faces units (requires restart)", gr.Slider, {"minimum": 1, "maximum": 10, "step": 1}, section=section))
-    
+
+    shared.opts.add_option("roop_detection_threshold", shared.OptionInfo(
+        0.5, "Detection threshold ", gr.Slider, {"minimum": 0.1, "maximum": 0.99, "step": 0.001}, section=section))
+
+
+
     shared.opts.add_option("roop_pp_default_face_restorer", shared.OptionInfo(
         None, "UI Default post processing face restorer (requires restart)", gr.Dropdown, {"interactive": True, "choices" : ["None"] + [x.name() for x in shared.face_restorers]}, section=section))
     shared.opts.add_option("roop_pp_default_face_restorer_visibility", shared.OptionInfo(

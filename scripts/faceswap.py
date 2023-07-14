@@ -7,6 +7,7 @@ from scripts.roop_utils import imgutils
 from scripts.roop_utils import models_utils
 from scripts.roop_postprocessing import upscaling
 from pprint import pprint
+import numpy as np
 
 #Reload all the modules when using "apply and restart"
 #This is mainly done for development purposes
@@ -64,6 +65,8 @@ class FaceSwapUnitSettings:
 
     # If True, discard images with low similarity
     check_similarity : bool 
+    # if True will compute similarity and add it to the image info
+    _compute_similarity :bool
 
     # Minimum similarity against the used face (reference, batch or checkpoint)
     min_sim: float
@@ -97,6 +100,10 @@ class FaceSwapUnitSettings:
         return faces_index
 
     @property
+    def compute_similarity(self) :
+        return self._compute_similarity or self.check_similarity
+
+    @property
     def batch_files(self):
         """
         Return empty array instead of None for batch files
@@ -110,7 +117,7 @@ class FaceSwapUnitSettings:
         Reference face is the checkpoint or the source image or the first image in the batch in that order.
         """
         if not hasattr(self,"_reference_face") :
-            if self.source_face and self.source_face != "None" :
+            if self.source_face is not None and self.source_face != "None" :
                 with open(self.source_face, "rb") as file:
                     try :
                         logger.info(f"loading pickle {file.name}")
@@ -128,11 +135,15 @@ class FaceSwapUnitSettings:
                         img_bytes = base64.b64decode(self.source_img)
                     self.source_img = Image.open(io.BytesIO(img_bytes))
                 source_img = pil_to_cv2(self.source_img)
-                self._reference_face =  swapper.get_or_default(swapper.get_faces(source_img), 0, None)    
+                self._reference_face =  swapper.get_or_default(swapper.get_faces(source_img), 0, None)  
+                if self._reference_face is None :
+                    logger.error("Face not found in reference image")  
             else :
-                logger.error("You need at least one face")
                 self._reference_face = None
-                
+
+        if self._reference_face is None :
+            logger.error("You need at least one reference face")
+
         return self._reference_face
     
     @property
@@ -157,6 +168,9 @@ class FaceSwapUnitSettings:
         """
         if not hasattr(self,"_blended_faces") :
             self._blended_faces = swapper.blend_faces(self.faces)
+            assert(all([not np.array_equal(self._blended_faces.embedding, face.embedding) for face in self.faces]) if len(self.faces) > 1 else True), "Blended faces cannot be the same as one of the face if len(face)>0"
+            assert(not np.array_equal(self._blended_faces.embedding,self.reference_face.embedding)  if len(self.faces) > 1 else True), "Blended faces cannot be the same as reference face if len(face)>0"
+
         return self._blended_faces
 
 # Register the tab, done here to prevent it from being added twice
@@ -208,20 +222,6 @@ class FaceSwapScript(scripts.Script):
     def show(self, is_img2img):
         return scripts.AlwaysVisible
 
-
-    # def after_component(self, component, **kwargs):
-    #     def update_default(component, elem_id, option_name ) :
-    #         if hasattr(component, "elem_id") :
-    #             id = component.elem_id
-    #             if id == elem_id :
-    #                 component.update(value = opts.data.get(option_name, component.value))           
-        
-    #     if hasattr(component, "elem_id") :
-    #         update_default(component, "roop_pp_face_restorer","roop_pp_default_face_restorer")
-    #         update_default(component, "roop_pp_face_restorer_visibility","roop_pp_default_face_restorer_visibility")
-    #         update_default(component, "roop_pp_face_restorer_weight","roop_pp_default_face_restorer_weight")
-    #         update_default(component, "roop_pp_upscaler","roop_pp_default_upscaler")
-    #         update_default(component, "roop_pp_upscaler_visibility","roop_pp_default_upscaler_visibility")
 
     def ui(self, is_img2img):
         with gr.Accordion(f"Roop {VERSION_FLAG}", open=False):
@@ -296,17 +296,26 @@ class FaceSwapScript(scripts.Script):
             else :
                 logger.info("blend all faces together")
                 src_faces = [unit.blended_faces]
+                assert(not np.array_equal(unit.reference_face.embedding,src_faces[0].embedding) if len(unit.faces)>1 else True), "Reference face cannot be the same as blended"
+
 
             for i,src_face in enumerate(src_faces):
                 logger.info(f"Process face {i}")
+                if unit.reference_face is not None :
+                    reference_face = unit.reference_face
+                else :
+                    logger.info("Use source face as reference face")
+                    reference_face = src_face
+
                 result: swapper.ImageResult = swapper.swap_face(
-                    unit.reference_face if unit.reference_face is not None else src_face,
+                    reference_face,
                     src_face,
                     image,
                     faces_index=unit.faces_index,
                     model=self.model,
                     same_gender=unit.same_gender,
-                    upscaled_swapper=upscaled_swapper
+                    upscaled_swapper=upscaled_swapper,
+                    compute_similarity=unit.compute_similarity
                 )
                 if result.image is None :
                     logger.error("Result image is None")

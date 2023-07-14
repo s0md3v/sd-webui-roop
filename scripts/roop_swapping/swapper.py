@@ -2,7 +2,7 @@ import copy
 import os
 from dataclasses import dataclass
 from pprint import pprint
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Set, Tuple, Union, Optional
 
 import cv2
 import insightface
@@ -15,6 +15,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from scripts.roop_swapping import upscaled_inswapper
 from scripts.roop_utils.imgutils import cv2_to_pil, pil_to_cv2
 from scripts.roop_logging import logger
+from modules.shared import opts
 
 providers = ["CPUExecutionProvider"]
 
@@ -131,7 +132,7 @@ def getFaceSwapModel(model_path: str):
     return FS_MODEL
 
 
-def get_faces(img_data: np.ndarray, det_size=(640, 640), det_thresh=0.5) -> List[Face]:
+def get_faces(img_data: np.ndarray, det_size=(640, 640), det_thresh : Optional[int]=None) -> List[Face]:
     """
     Detects and retrieves faces from an image using an analysis model.
 
@@ -142,6 +143,10 @@ def get_faces(img_data: np.ndarray, det_size=(640, 640), det_thresh=0.5) -> List
     Returns:
         list: A list of detected faces, sorted by their x-coordinate of the bounding box.
     """
+
+    if det_thresh is None : 
+        det_thresh = opts.data.get("roop_detection_threshold", 0.5)
+
     # Create a deep copy of the analysis model (otherwise det_size is attached to the analysis model and can't be changed)
     face_analyser = copy.deepcopy(getAnalysisModel())
 
@@ -256,11 +261,11 @@ def blend_faces(faces: List[Face]) -> Face:
         # Compute the mean of all embeddings
         blended_embedding = np.mean(embeddings, axis=0)
         
-        # Create a new Face object using the first face in the list
-        blended = faces[0]
-        
+        # Create a new Face object using the properties of the first face in the list
         # Assign the blended embedding to the blended Face object
-        blended.embedding = blended_embedding
+        blended = Face(embedding=blended_embedding, gender=faces[0].gender, age=faces[0].age)
+
+        assert not np.array_equal(blended.embedding,faces[0].embedding) if len(faces) > 1 else True, "If len(faces)>0, the blended embedding should not be the same than the first image"
         
         return blended
     
@@ -275,7 +280,8 @@ def swap_face(
     model: str,
     faces_index: Set[int] = {0},
     same_gender=True,
-    upscaled_swapper = False
+    upscaled_swapper = False,
+    compute_similarity = True
 ) -> ImageResult:
     """
     Swaps faces in the target image with the source face.
@@ -316,29 +322,31 @@ def swap_face(
             result_image = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
             return_result.image = result_image
 
-            try:
-                result_faces = get_faces(
-                    cv2.cvtColor(np.array(result_image), cv2.COLOR_RGB2BGR)
-                )
-                if same_gender:
-                    result_faces = [x for x in result_faces if x["gender"] == gender]
 
-                for i, swapped_face in enumerate(result_faces):
-                    logger.info(f"compare face {i}")
-                    if i in faces_index and i < len(target_faces):
-                        return_result.similarity[i] = cosine_similarity_face(
-                            source_face, swapped_face
-                        )
-                        return_result.ref_similarity[i] = cosine_similarity_face(
-                            reference_face, swapped_face
-                        )
+            if compute_similarity :
+                try:
+                    result_faces = get_faces(
+                        cv2.cvtColor(np.array(result_image), cv2.COLOR_RGB2BGR)
+                    )
+                    if same_gender:
+                        result_faces = [x for x in result_faces if x["gender"] == gender]
 
-                    logger.info(f"similarity {return_result.similarity}")
-                    logger.info(f"ref similarity {return_result.ref_similarity}")
+                    for i, swapped_face in enumerate(result_faces):
+                        logger.info(f"compare face {i}")
+                        if i in faces_index and i < len(target_faces):
+                            return_result.similarity[i] = cosine_similarity_face(
+                                source_face, swapped_face
+                            )
+                            return_result.ref_similarity[i] = cosine_similarity_face(
+                                reference_face, swapped_face
+                            )
 
-            except Exception as e:
-                logger.error("Swapping failed %s", e)
-                raise e
+                        logger.info(f"similarity {return_result.similarity}")
+                        logger.info(f"ref similarity {return_result.ref_similarity}")
+
+                except Exception as e:
+                    logger.error("Similarity processing failed %s", e)
+                    raise e
     except Exception as e :
         logger.error("Conversion failed %s", e)
         raise e

@@ -37,7 +37,9 @@ def faceswap_unit_ui(is_img2img, unit_num=1):
                     True, placeholder="Blend Faces", label="Blend Faces ((Source|Checkpoint)+References = 1)"
                 )
             gr.Markdown("""Discard images with low similarity or no faces :""")
-            check_similarity = gr.Checkbox(False, placeholder="discard", label="Check similarity")        
+            with gr.Row():
+                check_similarity = gr.Checkbox(False, placeholder="discard", label="Check similarity")  
+                compute_similarity = gr.Checkbox(False, label="Compute similarity")      
             min_sim = gr.Slider(0, 1, 0, step=0.01, label="Min similarity")
             min_ref_sim = gr.Slider(
                 0, 1, 0, step=0.01, label="Min reference similarity"
@@ -60,6 +62,7 @@ def faceswap_unit_ui(is_img2img, unit_num=1):
                 label="Swap in generated image",
                 visible=is_img2img,
             )
+    # If changed, you need to change FaceSwapUnitSettings accordingly
     return [
         img,
         face,
@@ -68,6 +71,7 @@ def faceswap_unit_ui(is_img2img, unit_num=1):
         enable,
         same_gender,
         check_similarity,
+        compute_similarity,
         min_sim,
         min_ref_sim,
         faces_index,
