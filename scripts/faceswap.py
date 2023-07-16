@@ -232,9 +232,20 @@ class FaceSwapScript(scripts.Script):
         # If the order is modified, the before_process should be changed accordingly.
         return components + upscaler
 
-    def before_process(self, p: StableDiffusionProcessing, *components):
+    # def make_script_first(self,p: StableDiffusionProcessing) :
+    # FIXME : not really useful, will only impact postprocessing (kept for further testing)
+    #     runner : scripts.ScriptRunner = p.scripts
+    #     alwayson = runner.alwayson_scripts
+    #     alwayson.pop(alwayson.index(self))
+    #     alwayson.insert(0, self)
+    #     print("Running in ", alwayson.index(self), "position")
+    #     logger.info("Running scripts : %s", pformat(runner.alwayson_scripts))
+
+    def read_config(self, p : StableDiffusionProcessing, *components) :
         # The order of processing for the components is important
         # The method first process faceswap units then postprocessing units 
+
+        # self.make_first_script(p)
 
         self.units: List[FaceSwapUnitSettings] = []
         
@@ -254,6 +265,13 @@ class FaceSwapScript(scripts.Script):
         )
         logger.debug("%s", pformat(self.postprocess_options))
 
+        p.do_not_save_samples = not self.keep_original_images
+
+
+    def process(self, p: StableDiffusionProcessing, *components):
+
+        self.read_config(p, *components)
+
         #If is instance of img2img, we check if face swapping in source is required.
         if isinstance(p, StableDiffusionProcessingImg2Img):
             if self.enabled:
@@ -272,7 +290,6 @@ class FaceSwapScript(scripts.Script):
                 for i,img in enumerate(p.init_images) :
                     p.init_images[i] = imgutils.apply_mask(img, p, i)
                         
-
 
     def process_image_unit(self, unit : FaceSwapUnitSettings, image: Image.Image, info = None, upscaled_swapper = False) -> List:
         """Process one image and return a List of (image, info) (one if blended, many if not).
@@ -383,7 +400,7 @@ class FaceSwapScript(scripts.Script):
                                         images.append(swp_img)
                                         infotexts.append(new_info)
                                         if p.outpath_samples and opts.samples_save :
-                                            save_image(swp_img, p.outpath_samples, "", p.seeds[batch_index], p.prompts[batch_index], opts.samples_format, p=p, suffix="-swapped")      
+                                            save_image(swp_img, p.outpath_samples, "", p.all_seeds[batch_index], p.all_prompts[batch_index], opts.samples_format,info=new_info, p=p, suffix="-swapped")      
                                     else :
                                         logger.error("swp image is None")
                             elif unit.swap_in_source and not self.keep_original_images :
