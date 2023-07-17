@@ -17,7 +17,7 @@ from scripts.roop_utils.imgutils import cv2_to_pil, pil_to_cv2
 from scripts.roop_logging import logger
 from scripts import roop_globals
 from modules.shared import opts
-
+from functools import lru_cache
 providers = ["CPUExecutionProvider"]
 
 
@@ -74,13 +74,11 @@ def compare_faces(img1: Image.Image, img2: Image.Image) -> float:
 
 
 
-# Global variable to store the analysis model
-ANALYSIS_MODEL = None
-
 
 class FaceModelException(Exception):
     pass
 
+@lru_cache(maxsize=1)
 def getAnalysisModel():
     """
     Retrieves the analysis model for face analysis.
@@ -88,29 +86,20 @@ def getAnalysisModel():
     Returns:
         insightface.app.FaceAnalysis: The analysis model for face analysis.
     """
-    global ANALYSIS_MODEL
+    try :
+        if not os.path.exists(roop_globals.ANALYZER_DIR):
+            os.makedirs(roop_globals.ANALYZER_DIR)
+
+        logger.info("Load analysis model, will take some time.")
+        # Initialize the analysis model with the specified name and providers
+        return insightface.app.FaceAnalysis(
+            name="buffalo_l", providers=providers, root=roop_globals.ANALYZER_DIR
+        )
+    except Exception as e :
+        logger.error("Loading of swapping model failed, please check the requirements (On Windows, download and install Visual Studio. During the install, make sure to include the Python and C++ packages.)")
+        raise FaceModelException()
     
-    # Check if the analysis model has been initialized
-    if ANALYSIS_MODEL is None:
-        try :
-            if not os.path.exists(roop_globals.ANALYZER_DIR):
-                os.makedirs(roop_globals.ANALYZER_DIR)
-
-            logger.info("Load analysis model, will take some time.")
-            # Initialize the analysis model with the specified name and providers
-            ANALYSIS_MODEL = insightface.app.FaceAnalysis(
-                name="buffalo_l", providers=providers, root=roop_globals.ANALYZER_DIR
-            )
-        except Exception as e :
-            logger.error("Loading of swapping model failed, please check the requirements (On Windows, download and install Visual Studio. During the install, make sure to include the Python and C++ packages.)")
-            raise FaceModelException()
-    # Return the analysis model
-    return ANALYSIS_MODEL
-
-
-FS_MODEL = None  # Global variable to store the face swap model.
-CURRENT_FS_MODEL_PATH = None  # Global variable to store the current path of the face swap model.
-
+@lru_cache(maxsize=1)
 def getFaceSwapModel(model_path: str):
     """
     Retrieves the face swap model and initializes it if necessary.
@@ -121,19 +110,11 @@ def getFaceSwapModel(model_path: str):
     Returns:
         insightface.model_zoo.FaceModel: The face swap model.
     """
-    global FS_MODEL
-    global CURRENT_FS_MODEL_PATH
-
-    # Check if the current model path is different from the new model path.
-    if CURRENT_FS_MODEL_PATH is None or CURRENT_FS_MODEL_PATH != model_path:
-        logger.info("Load swapping model, will take some time.")
-        try :
-            CURRENT_FS_MODEL_PATH = model_path
-            # Initializes the face swap model using the specified model path.
-            FS_MODEL = upscaled_inswapper.UpscaledINSwapper(insightface.model_zoo.get_model(model_path, providers=providers))
-        except Exception as e :
-            logger.error("Loading of swapping model failed, please check the requirements (On Windows, download and install Visual Studio. During the install, make sure to include the Python and C++ packages.)")
-    return FS_MODEL
+    try :
+        # Initializes the face swap model using the specified model path.
+        return upscaled_inswapper.UpscaledINSwapper(insightface.model_zoo.get_model(model_path, providers=providers))
+    except Exception as e :
+        logger.error("Loading of swapping model failed, please check the requirements (On Windows, download and install Visual Studio. During the install, make sure to include the Python and C++ packages.)")
 
 
 def get_faces(img_data: np.ndarray, det_size=(640, 640), det_thresh : Optional[int]=None) -> List[Face]:

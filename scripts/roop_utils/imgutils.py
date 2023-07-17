@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageChops, ImageOps,ImageFilter
 import cv2
 import numpy as np
 from math import isqrt, ceil
@@ -123,7 +123,49 @@ def apply_mask(img : Image.Image,p : processing.StableDiffusionProcessing, batch
     Returns:
         PIL Image object
     """
-    img = processing.apply_overlay(img, p.paste_to, batch_index, p.overlay_images)
-    if p.color_corrections is not None and batch_index < len(p.color_corrections):
-        img = processing.apply_color_correction(p.color_corrections[batch_index], img)        
+    if isinstance(p, processing.StableDiffusionProcessingImg2Img) :
+        if p.inpaint_full_res :
+            overlays = p.overlay_images
+            if overlays is None or batch_index >= len(overlays):
+                return img
+            overlay : Image.Image = overlays[batch_index]
+            overlay = overlay.resize((img.size), resample= Image.Resampling.LANCZOS)
+            img = img.copy()
+            img.paste(overlay, (0, 0), overlay)
+            return img 
+        
+        img = processing.apply_overlay(img, p.paste_to, batch_index, p.overlay_images)
+        if p.color_corrections is not None and batch_index < len(p.color_corrections):
+            img = processing.apply_color_correction(p.color_corrections[batch_index], img)        
     return img
+
+
+
+def prepare_mask(
+    mask: Image.Image, p: processing.StableDiffusionProcessing
+) -> Image.Image:
+    """
+    Prepare an image mask for the inpainting process. (This comes from controlnet)
+
+    This function takes as input a PIL Image object and an instance of the 
+    StableDiffusionProcessing class, and performs the following steps to prepare the mask:
+
+    1. Convert the mask to grayscale (mode "L").
+    2. If the 'inpainting_mask_invert' attribute of the processing instance is True,
+       invert the mask colors.
+    3. If the 'mask_blur' attribute of the processing instance is greater than 0,
+       apply a Gaussian blur to the mask with a radius equal to 'mask_blur'.
+
+    Args:
+        mask (Image.Image): The input mask as a PIL Image object.
+        p (processing.StableDiffusionProcessing): An instance of the StableDiffusionProcessing class 
+                                                   containing the processing parameters.
+
+    Returns:
+        mask (Image.Image): The prepared mask as a PIL Image object.
+    """
+    mask = mask.convert("L")
+    #FIXME : Properly fix blur
+    # if getattr(p, "mask_blur", 0) > 0:
+    #     mask = mask.filter(ImageFilter.GaussianBlur(p.mask_blur))
+    return mask

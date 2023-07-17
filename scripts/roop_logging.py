@@ -1,9 +1,8 @@
 import logging
 import copy
 import sys
-
 from modules import shared
-
+from PIL import Image
 
 class ColoredFormatter(logging.Formatter):
     COLORS = {
@@ -36,6 +35,19 @@ if not logger.handlers:
     logger.addHandler(handler)
 
 # Configure logger
-loglevel_string = getattr(shared.cmd_opts, "controlnet_loglevel", "INFO")
-loglevel = getattr(logging, loglevel_string.upper(), "info")
+loglevel_string = getattr(shared.cmd_opts, "roop_loglevel", "INFO")
+loglevel = getattr(logging, loglevel_string.upper(), "INFO")
 logger.setLevel(loglevel)
+
+import tempfile
+if logger.getEffectiveLevel() <= logging.DEBUG :
+    DEBUG_DIR = tempfile.mkdtemp()
+
+def save_img_debug(img: Image.Image, message: str, *opts):
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        with tempfile.NamedTemporaryFile(dir=DEBUG_DIR, delete=False, suffix=".png") as temp_file:
+            img_path = temp_file.name
+            img.save(img_path)
+
+        message_with_link = f"{message}\nImage: file://{img_path}"
+        logger.debug(message_with_link, *opts)
