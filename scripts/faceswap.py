@@ -144,7 +144,8 @@ class FaceSwapScript(scripts.Script):
         )
         logger.debug("%s", pformat(self.postprocess_options))
 
-        p.do_not_save_samples = not self.keep_original_images
+        if self.enabled :
+            p.do_not_save_samples = not self.keep_original_images
 
 
     def process(self, p: StableDiffusionProcessing, *components):
