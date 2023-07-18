@@ -135,3 +135,5 @@ class FaceSwapUnitSettings:
             assert(not np.array_equal(self._blended_faces.embedding,self.reference_face.embedding)  if len(self.faces) > 1 else True), "Blended faces cannot be the same as reference face if len(face)>0"
 
         return self._blended_faces
+
+

@@ -6,3 +6,4 @@ dill==0.3.6
 pandas
 ifnude
 cython
+pydantic==1.10.9
