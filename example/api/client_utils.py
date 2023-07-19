@@ -1,18 +1,16 @@
-from scripts.roop_swapping import swapper
-import numpy as np
-import base64
-import io
-from dataclasses import dataclass, fields
-from typing import Dict, List, Set, Tuple, Union, Optional
-import dill as pickle
-import gradio as gr
-from insightface.app.common import Face
+from typing import List, Tuple
 from PIL import Image
-from scripts.roop_utils.imgutils import (pil_to_cv2,convert_to_sd, base64_to_pil)
-from scripts.roop_logging import logger
 from pydantic import BaseModel, Field
-from scripts.roop_postprocessing.postprocessing_options import InpaintingWhen
+from enum import Enum
+import base64, io
+from io import BytesIO
+from typing import Dict, List, Set, Tuple, Union, Optional
 
+class InpaintingWhen(Enum):
+    NEVER = "Never"
+    BEFORE_UPSCALING = "Before Upscaling/all"
+    BEFORE_RESTORE_FACE = "After Upscaling/Before Restore Face"
+    AFTER_ALL = "After All"
 
 class FaceSwapUnit(BaseModel) :
     
@@ -42,12 +40,6 @@ class FaceSwapUnit(BaseModel) :
     # The face index to use for swapping
     faces_index: Tuple[int] = Field(description='The face index to use for swapping, list of face numbers starting from 0', default=(0,))
 
-    def get_batch_images(self) -> List[Image.Image] :
-        images = []
-        if self.batch_images :
-            for img in self.batch_images :
-                images.append(base64_to_pil(img))
-        return images
 
 class PostProcessingOptions (BaseModel):
     face_restorer_name: str = Field(description='face restorer name', default=None)
@@ -71,6 +63,32 @@ class FaceSwapRequest(BaseModel) :
     units : List[FaceSwapUnit]
     postprocessing : PostProcessingOptions
 
+
 class FaceSwapResponse(BaseModel) :
     images : List[str] = Field(description='base64 swapped image',default=None)
     infos : List[str]
+
+    @property
+    def pil_images(self) :
+        return [base64_to_pil(img) for img in self.images]
+
+def pil_to_base64(img):
+    if isinstance(img, str):
+        img = Image.open(img)
+
+    buffer = BytesIO()
+    img.save(buffer, format='PNG')
+    img_data = buffer.getvalue()
+    base64_data = base64.b64encode(img_data)
+    return base64_data.decode('utf-8')    
+
+def base64_to_pil(base64str : Optional[str]) -> Optional[Image.Image] :
+    if base64str is None :
+        return None
+    if 'base64,' in base64str:  # check if the base64 string has a data URL scheme
+        base64_data = base64str.split('base64,')[-1]
+        img_bytes = base64.b64decode(base64_data)
+    else:
+        # if no data URL scheme, just decode
+        img_bytes = base64.b64decode(base64str)
+    return Image.open(io.BytesIO(img_bytes))

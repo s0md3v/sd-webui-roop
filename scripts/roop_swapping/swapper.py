@@ -397,7 +397,7 @@ def process_image_unit(model, unit : FaceSwapUnitSettings, image: Image.Image, i
     logger.debug("process_image_unit : Unit produced %s results", len(results))
     return results
 
-def process_images_units(model, units : List[FaceSwapUnitSettings], images: List[Tuple[Image.Image, str]], upscaled_swapper = False, force_blend = False) -> List:
+def process_images_units(model, units : List[FaceSwapUnitSettings], images: List[Tuple[Optional[Image.Image], Optional[str]]], upscaled_swapper = False, force_blend = False) -> List:
     if len(units) == 0 :
         logger.info("Finished processing image, return %s images", len(images))
         return None

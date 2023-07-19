@@ -5,6 +5,7 @@ from modules import shared
 from enum import Enum
 
 class InpaintingWhen(Enum):
+    NEVER = "Never"
     BEFORE_UPSCALING = "Before Upscaling/all"
     BEFORE_RESTORE_FACE = "After Upscaling/Before Restore Face"
     AFTER_ALL = "After All"

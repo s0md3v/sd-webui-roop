@@ -172,7 +172,7 @@ def prepare_mask(
     #     mask = mask.filter(ImageFilter.GaussianBlur(p.mask_blur))
     return mask
 
-def base64_to_pil(base64str : Optional[str]) :
+def base64_to_pil(base64str : Optional[str]) -> Optional[Image.Image] :
     if base64str is None :
         return None
     if 'base64,' in base64str:  # check if the base64 string has a data URL scheme
@@ -182,3 +182,4 @@ def base64_to_pil(base64str : Optional[str]) :
         # if no data URL scheme, just decode
         img_bytes = base64.b64decode(base64str)
     return Image.open(io.BytesIO(img_bytes))
+

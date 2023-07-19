@@ -36,7 +36,7 @@ class FaceSwapUnitSettings:
     # Minimum similarity against the reference (reference or checkpoint if checkpoint is given)
     min_ref_sim: float
     # The face index to use for swapping
-    _faces_index: int
+    _faces_index: str
     # Swap in the source image in img2img (before processing)
     swap_in_source: bool
     # Swap in the generated image in img2img (always on for txt2img)
