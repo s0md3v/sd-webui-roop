@@ -158,7 +158,7 @@ class FaceSwapScript(scripts.Script):
 
         #If is instance of img2img, we check if face swapping in source is required.
         if isinstance(p, StableDiffusionProcessingImg2Img):
-            if self.enabled:
+            if self.enabled and len(self.swap_in_source_units) > 0:
                 init_images : List[Tuple[Image.Image, str]] = [(img,None) for img in p.init_images]
                 new_inits  = swapper.process_images_units(get_current_model(), self.swap_in_source_units,images=init_images, upscaled_swapper=self.upscaled_swapper_in_source,force_blend=True)
                 logger.info(f"processed init images: {len(init_images)}")
