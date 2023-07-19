@@ -1,3 +1,5 @@
+import io
+from typing import Optional
 from PIL import Image, ImageChops, ImageOps,ImageFilter
 import cv2
 import numpy as np
@@ -6,7 +8,7 @@ import torch
 from ifnude import detect
 from scripts.roop_globals import SD_CONVERT_SCORE
 from modules import processing
-
+import base64
 
 def convert_to_sd(img):
     shapes = []
@@ -169,3 +171,14 @@ def prepare_mask(
     # if getattr(p, "mask_blur", 0) > 0:
     #     mask = mask.filter(ImageFilter.GaussianBlur(p.mask_blur))
     return mask
+
+def base64_to_pil(base64str : Optional[str]) :
+    if base64str is None :
+        return None
+    if 'base64,' in base64str:  # check if the base64 string has a data URL scheme
+        base64_data = base64str.split('base64,')[-1]
+        img_bytes = base64.b64decode(base64_data)
+    else:
+        # if no data URL scheme, just decode
+        img_bytes = base64.b64decode(base64str)
+    return Image.open(io.BytesIO(img_bytes))

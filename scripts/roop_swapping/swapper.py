@@ -13,11 +13,13 @@ from PIL import Image
 from sklearn.metrics.pairwise import cosine_similarity
 
 from scripts.roop_swapping import upscaled_inswapper
-from scripts.roop_utils.imgutils import cv2_to_pil, pil_to_cv2
-from scripts.roop_logging import logger
+from scripts.roop_utils.imgutils import cv2_to_pil, pil_to_cv2, convert_to_sd
+from scripts.roop_logging import logger, save_img_debug
 from scripts import roop_globals
 from modules.shared import opts
 from functools import lru_cache
+from scripts.faceswap_unit_settings import FaceSwapUnitSettings
+
 providers = ["CPUExecutionProvider"]
 
 
@@ -336,3 +338,81 @@ def swap_face(
         logger.error("Conversion failed %s", e)
         raise e
     return return_result
+
+
+def process_image_unit(model, unit : FaceSwapUnitSettings, image: Image.Image, info = None, upscaled_swapper = False, force_blend = False) -> List:
+    """Process one image and return a List of (image, info) (one if blended, many if not).
+
+    Args:
+        unit : the current unit
+        image : the image where to apply swapping
+        info : The info
+
+    Returns:
+        List of tuple of (image, info) where image is the image where swapping has been applied and info is the image info with similarity infos.
+    """
+
+    results = []
+    if unit.enable :
+        if convert_to_sd(image) :
+            return [(image, info)]
+        if not unit.blend_faces and not force_blend :
+            src_faces = unit.faces
+            logger.info(f"will generate {len(src_faces)} images")
+        else :
+            logger.info("blend all faces together")
+            src_faces = [unit.blended_faces]
+            assert(not np.array_equal(unit.reference_face.embedding,src_faces[0].embedding) if len(unit.faces)>1 else True), "Reference face cannot be the same as blended"
+
+
+        for i,src_face in enumerate(src_faces):
+            logger.info(f"Process face {i}")
+            if unit.reference_face is not None :
+                reference_face = unit.reference_face
+            else :
+                logger.info("Use source face as reference face")
+                reference_face = src_face
+
+            save_img_debug(image, "Before swap")
+            result: ImageResult = swap_face(
+                reference_face,
+                src_face,
+                image,
+                faces_index=unit.faces_index,
+                model=model,
+                same_gender=unit.same_gender,
+                upscaled_swapper=upscaled_swapper,
+                compute_similarity=unit.compute_similarity
+            )
+            save_img_debug(result.image, "After swap")
+
+            if result.image is None :
+                logger.error("Result image is None")
+            if (not unit.check_similarity) or result.similarity and all([result.similarity.values()!=0]+[x >= unit.min_sim for x in result.similarity.values()]) and all([result.ref_similarity.values()!=0]+[x >= unit.min_ref_sim for x in result.ref_similarity.values()]):
+                results.append((result.image, f"{info}, similarity = {result.similarity}, ref_similarity = {result.ref_similarity}"))
+            else:
+                logger.warning(
+                    f"skip, similarity to low, sim = {result.similarity} (target {unit.min_sim}) ref sim = {result.ref_similarity} (target = {unit.min_ref_sim})"
+                )
+    logger.debug("process_image_unit : Unit produced %s results", len(results))
+    return results
+
+def process_images_units(model, units : List[FaceSwapUnitSettings], images: List[Tuple[Image.Image, str]], upscaled_swapper = False, force_blend = False) -> List:
+    if len(units) == 0 :
+        logger.info("Finished processing image, return %s images", len(images))
+        return None
+    
+    logger.debug("%s more units", len(units))
+
+    processed_images = []
+    for i,(image, info) in enumerate(images) :
+        logger.debug("Processing image %s", i)
+        swapped = process_image_unit(model,units[0],image, info, upscaled_swapper, force_blend)
+        logger.debug("Image %s -> %s images", i, len(swapped))
+        nexts = process_images_units(model,units[1:],swapped, upscaled_swapper,force_blend)
+        if nexts :
+            processed_images.extend(nexts)
+        else :
+            processed_images.extend(swapped)
+    
+    return processed_images

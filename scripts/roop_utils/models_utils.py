@@ -4,6 +4,8 @@ import os
 import modules.scripts as scripts
 from modules import scripts
 from scripts.roop_globals import EXTENSION_PATH
+from modules.shared import opts
+from scripts.roop_logging import logger
 
 def get_models():
     """
@@ -26,6 +28,17 @@ def get_models():
     models = [x for x in models if x.endswith(".onnx")]
 
     return models
+
+def get_current_model() -> str :
+    model = opts.data.get("roop_model", None)
+    if model is None :
+        models = get_models()
+        model = models[0] if len(models) else None
+    logger.info("Try to use model : %s", model)
+    if not os.path.isfile(model):
+        logger.error("The model %s cannot be found or loaded", model)
+        raise FileNotFoundError("No faceswap model found. Please add it to the roop directory.")
+    return model
 
 def get_face_checkpoints():
     """

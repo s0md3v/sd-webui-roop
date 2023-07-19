@@ -18,7 +18,7 @@ class FaceSwapUnitSettings:
     # The checkpoint file
     source_face : str
     # The batch source images
-    _batch_files: gr.components.File
+    _batch_files: Union[gr.components.File,List[Image.Image]]
     # Will blend faces if True
     blend_faces: bool
     # Enable this unit
@@ -118,7 +118,11 @@ class FaceSwapUnitSettings:
         if self.batch_files is not None and not hasattr(self,"_faces") :
             self._faces = [self.reference_face] if self.reference_face is not None else []
             for file in self.batch_files :
-                img = Image.open(file.name)
+                if isinstance(file, Image.Image) :
+                    img = file
+                else :
+                    img = Image.open(file.name)
+
                 face = swapper.get_or_default(swapper.get_faces(pil_to_cv2(img)), 0, None)
                 if face is not None :
                     self._faces.append(face)
