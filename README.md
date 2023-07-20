@@ -1,8 +1,12 @@
-# roop for StableDiffusion
+# Roop 1.0 for StableDiffusion
 
 This is an extension for StableDiffusion's [AUTOMATIC1111 web-ui](https://github.com/AUTOMATIC1111/stable-diffusion-webui/) that allows face-replacement in images. It is based on [roop](https://github.com/s0md3v/roop) but will be developed seperately.
 
-![example](example/example.png)
+![example](docs/example.png)
+
+Main interface :
+
+![](docs/main_interface.png)
 
 ### Disclaimer
 
@@ -11,6 +15,103 @@ This software is meant to be a productive contribution to the rapidly growing AI
 The developers of this software are aware of its possible unethical applicaitons and are committed to take preventative measures against them. It has a built-in check which prevents the program from working on inappropriate media. We will continue to develop this project in the positive direction while adhering to law and ethics. This project may be shut down or include watermarks on the output if requested by law.
 
 Users of this software are expected to use this software responsibly while abiding the local law. If face of a real person is being used, users are suggested to get consent from the concerned person and clearly mention that it is a deepfake when posting content online. Developers of this software will not be responsible for actions of end-users.
+
+**This extension should not be forked to provide a public easy way to circumvent NSFW filtering.**
+
+### Features
+
++ Notion of face unit as for controlNet: The program introduces the concept of a face unit, similar to controlNet. Currently, there are three default units available (configurable option in sd, supports up to 10 units). To work with face units, configure the desired number of units in the program settings (sd).
+
+![](docs/face_units.png)
+
++ Support of Vladmantic and a1111. 
+
++ Fixed inpainting "only masked" and mask
+
++ Performance improvements
+
++ Roop Tab with tools. A new Roop Tab has been added, providing various tools. To access the Roop Tab and its tools, navigate to the corresponding section in the program interface.
+
+![](docs/tab.png)
+
++ Roop settings in sd settings : Roop settings have been integrated into the sd settings. To configure Roop settings, navigate to the sd settings section of the program interface.
+
+![](docs/settings.png)
+
++ Allow reuse of faces via checkpoints (~2kb): Checkpoints can now be built in the FaceTools tab, enabling the reuse of faces. Checkpoints take precedence over the reference image, with the reference source image being discarded while retaining the batch source images. To build checkpoints for face reuse, follow the steps outlined in the FaceTools tab.
+
+In builder :
+
+![](docs/checkpoints.png)
+
+In face swapper :
+
+![](docs/checkpoints_use.png)
+
++ Gender detection of faces : The program now includes gender detection for faces. Note that face numbers only represent gender and can be disabled if desired. To enable or disable gender detection, refer to the corresponding settings in the program interface.
+
+![](docs/gender.png)
+
+
++ Face combination (blending) sources, references, and checkpoints: Blending (face combination) is now activated by default. This feature allows the use of multiple versions of a face to improve the swapping result. Face blending is also performed during the creation of face checkpoints using the batch source image option. To utilize face combination and blending, refer to the options available in the program interface, particularly in the batch source image section.
+
+Configuration : 
+
+![](docs/blend_face.png)
+
+Result :
+
+![](docs/testein.png)
+
++ Keep original images before swap (option): This option allows the preservation of the original images before the swapping process. To enable or disable the preservation of original images, refer to the corresponding option in the settings interface.
+
+![](docs/keep_orig.png)
+
+
++ Several versions of the same face can be used for replacement: Multiple versions of the same face can now be used for replacement. If blending is not activated, several images will be generated. Otherwise, blended faces will be created. This feature utilizes the batch source image option. To use multiple versions of a face for replacement, follow the instructions in the batch source image section.
+
+![](docs/multiple_face_src.png)
+
+
++ Face similarity and filtering: Face similarity and filtering have been introduced, allowing comparisons against the reference and/or source images. This feature can be configured using the two sliders: minimum similarity (min sim) and minimum reference similarity (min ref sim). The reference can be either the checkpoint or the reference image.Adjust the sliders (min sim and min ref sim) to configure face similarity and filtering according to your requirements.
+
+![](docs/similarity.png)
+
+
++ Face comparison in tools: The extension now includes face comparison functionality in the tools section. To perform face comparison, navigate to the tools section and follow the instructions provided.
+
+![](docs/compare.png)
+
+
++ Face extraction in tools: Face extraction, with or without upscaling, is now available in the tools section. To extract faces, with or without upscaling, refer to the corresponding options in the tools section.
+
+![](docs/extract.png)
+
+
++ Better post-processing with a lot of options :
+
+![](docs/post-processing.png)
+
+
++ Post inpainting: This feature allows the application of image-to-image inpainting specifically to faces. To apply post inpainting to faces, follow the instructions provided in the program interface.
+
+Configuration :
+
+![](docs/postinpainting.png)
+
+Result :
+
+![](docs/postinpainting_result.png)
+
+
+    LDSR upscaled inswapper:
+        Description: The program includes an LDSR upscaled inswapper option, which may help improve results. It incorporates LDSR (Laplace-Dirichlet) upsampling, sharpness adjustment, and color correction.
+        Instructions: To enable the LDSR upscaled inswapper option, refer to the sd settings section.
+
+    API example (not retested):
+        Description: The program includes an API example. Note that this example has not been retested.
+        Instructions: Consult the provided API documentation for information on utilizing the API example.
+
 
 ## Installation
 First of all, if you can't install it for some reason, don't open an issue here. Google your errors.
@@ -31,6 +132,11 @@ For rest of the errors, use google. Good luck.
 3. That's it, now the generated result will have the face you selected
 
 ## Tips
+
+#### I hate you for filtering NSFW
+
+I totally get why people wants it as an option. But it would make it too easy to bypass. I am not against nsfw in general on sd. I am against swapping the face of a real person into nsfw content which is really different. If it were possible to check that the faces were synthetic faces (which is currently not reliably possible) before making the swap, I would have no problem with this. Making it easy for everyone seems ethically risky. In any case, I wouldn't take this responsibility on a personal level. I wouldn't want to feel responsible for someone being harassed with this tool.
+
 #### Getting good quality results
 First of all, make sure the "Restore Face" option is enabled. You can also try the "Upscaler" option or for more finer control, use an upscaler from the "Extras" tab.
 
