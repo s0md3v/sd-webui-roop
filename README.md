@@ -104,13 +104,57 @@ Result :
 ![](docs/postinpainting_result.png)
 
 
-    LDSR upscaled inswapper:
-        Description: The program includes an LDSR upscaled inswapper option, which may help improve results. It incorporates LDSR (Laplace-Dirichlet) upsampling, sharpness adjustment, and color correction.
-        Instructions: To enable the LDSR upscaled inswapper option, refer to the sd settings section.
++ LDSR upscaled inswapper: The program includes an LDSR upscaled inswapper option, which may help improve results. It incorporates LDSR upsampling, sharpness adjustment, and color correction and face restorer. This is done **before face merging** and only on **swapped images**. It also provides a lot of configuration on mask. This can improve results drastically. To enable the LDSR upscaled inswapper option, refer to the sd settings section.
 
-    API example (not retested):
-        Description: The program includes an API example. Note that this example has not been retested.
-        Instructions: Consult the provided API documentation for information on utilizing the API example.
+![](docs/upscalled_swapper.png)
+
+
++ Better API with typing support :
+
+```python
+import base64
+import io
+import requests
+from PIL import Image
+from client_utils import FaceSwapRequest, FaceSwapUnit, PostProcessingOptions, FaceSwapResponse, pil_to_base64
+
+address = 'http://127.0.0.1:7860'
+
+# First face unit :
+unit1 = FaceSwapUnit(
+    source_img=pil_to_base64("../../references/man.png"), # The face you want to use
+    faces_index=(0,) # Replace first face
+)
+
+# Second face unit :
+unit2 = FaceSwapUnit(
+    source_img=pil_to_base64("../../references/woman.png"), # The face you want to use
+    same_gender=True,
+    faces_index=(0,) # Replace first woman since same gender is on
+)
+
+# Post-processing config :
+pp = PostProcessingOptions(
+    face_restorer_name="CodeFormer",
+    codeformer_weight=0.5,
+    restorer_visibility= 1)
+
+# Prepare the request 
+request = FaceSwapRequest (
+    image = pil_to_base64("test_image.png"),
+    units= [unit1, unit2], 
+    postprocessing=pp
+)
+
+
+result = requests.post(url=f'{address}/roop/swap_face', data=request.json(), headers={"Content-Type": "application/json; charset=utf-8"})
+response = FaceSwapResponse.parse_obj(result.json())
+
+for img, info in zip(response.pil_images, response.infos):
+    img.show(title = info)
+
+
+```
 
 
 ## Installation
