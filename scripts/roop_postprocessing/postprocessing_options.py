@@ -26,6 +26,7 @@ class PostProcessingOptions:
     inpainting_steps : int = 20
     inpainting_sampler : str = "Euler"
     inpainting_when : InpaintingWhen = InpaintingWhen.BEFORE_UPSCALING
+    inpainting_model : str = "Current"
     
     @property
     def upscaler(self) -> UpscalerData:

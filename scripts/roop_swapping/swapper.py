@@ -119,13 +119,14 @@ def getFaceSwapModel(model_path: str):
         logger.error("Loading of swapping model failed, please check the requirements (On Windows, download and install Visual Studio. During the install, make sure to include the Python and C++ packages.)")
 
 
-def get_faces(img_data: np.ndarray, det_size=(640, 640), det_thresh : Optional[int]=None) -> List[Face]:
+def get_faces(img_data: np.ndarray, det_size=(640, 640), det_thresh : Optional[int]=None, sort_by_face_size = False) -> List[Face]:
     """
     Detects and retrieves faces from an image using an analysis model.
 
     Args:
         img_data (np.ndarray): The image data as a NumPy array.
         det_size (tuple): The desired detection size (width, height). Defaults to (640, 640).
+        sort_by_face_size (bool) : Will sort the faces by their size from larger to smaller face
 
     Returns:
         list: A list of detected faces, sorted by their x-coordinate of the bounding box.
@@ -150,6 +151,9 @@ def get_faces(img_data: np.ndarray, det_size=(640, 640), det_thresh : Optional[i
         return get_faces(img_data, det_size=det_size_half, det_thresh=det_thresh)
 
     try:
+        if sort_by_face_size :
+            return sorted(face, reverse=True, key=lambda x: (x.bbox[2] - x.bbox[0]) * (x.bbox[3] - x.bbox[1]))
+
         # Sort the detected faces based on their x-coordinate of the bounding box
         return sorted(face, key=lambda x: x.bbox[0])
     except Exception as e:
@@ -268,7 +272,8 @@ def swap_face(
     faces_index: Set[int] = {0},
     same_gender=True,
     upscaled_swapper = False,
-    compute_similarity = True
+    compute_similarity = True,
+    sort_by_face_size = False
 ) -> ImageResult:
     """
     Swaps faces in the target image with the source face.
@@ -294,7 +299,7 @@ def swap_face(
             result = target_img
             model_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), model)
             face_swapper = getFaceSwapModel(model_path)
-            target_faces = get_faces(target_img)
+            target_faces = get_faces(target_img, sort_by_face_size=sort_by_face_size)
             logger.info("Target faces count : %s", len(target_faces))
 
             if same_gender:
@@ -313,7 +318,7 @@ def swap_face(
             if compute_similarity :
                 try:
                     result_faces = get_faces(
-                        cv2.cvtColor(np.array(result_image), cv2.COLOR_RGB2BGR)
+                        cv2.cvtColor(np.array(result_image), cv2.COLOR_RGB2BGR), sort_by_face_size=sort_by_face_size
                     )
                     if same_gender:
                         result_faces = [x for x in result_faces if x["gender"] == gender]
@@ -382,7 +387,8 @@ def process_image_unit(model, unit : FaceSwapUnitSettings, image: Image.Image, i
                 model=model,
                 same_gender=unit.same_gender,
                 upscaled_swapper=upscaled_swapper,
-                compute_similarity=unit.compute_similarity
+                compute_similarity=unit.compute_similarity,
+                sort_by_face_size=unit.sort_by_size
             )
             save_img_debug(result.image, "After swap")
 

@@ -8,10 +8,12 @@ import modules.scripts as scripts
 import numpy as np
 import onnx
 import pandas as pd
+from scripts.faceswap_unit_ui import faceswap_unit_ui
 from scripts.faceswap_upscaler_ui import upscaler_ui
 from insightface.app.common import Face
 from modules import script_callbacks, scripts
 from PIL import Image
+from modules.shared import opts 
 
 from scripts.roop_utils import imgutils
 from scripts.roop_utils.imgutils import pil_to_cv2
@@ -20,7 +22,10 @@ from scripts.roop_logging import logger
 import scripts.roop_swapping.swapper as swapper
 from scripts.roop_postprocessing.postprocessing_options import PostProcessingOptions
 from scripts.roop_postprocessing.postprocessing import enhance_image
-
+from dataclasses import dataclass, fields
+from typing import Dict, List, Set, Tuple, Union, Optional
+from scripts.faceswap_unit_settings import FaceSwapUnitSettings
+from scripts.roop_utils.models_utils import get_current_model
 
 def compare(img1, img2):
     if img1 is not None and img2 is not None:
@@ -159,6 +164,55 @@ def explore_onnx_faceswap_model(model_path):
     df = pd.DataFrame(data)
     return df
 
+def batch_process(files, save_path,  *components):
+    try :
+        if save_path is not None:
+            os.makedirs(save_path, exist_ok=True)
+
+        units_count = opts.data.get("roop_units_count", 3)
+        units: List[FaceSwapUnitSettings] = []
+
+        #Parse and convert units flat components into FaceSwapUnitSettings
+        for i in range(0, units_count):
+            units += [FaceSwapUnitSettings.get_unit_configuration(i, components)] 
+
+        for i, u in enumerate(units):
+            logger.debug("%s, %s", pformat(i), pformat(u))
+
+        #Parse the postprocessing options
+        #We must first find where to start from (after face swapping units) 
+        len_conf: int = len(fields(FaceSwapUnitSettings))
+        shift: int = units_count * len_conf
+        postprocess_options = PostProcessingOptions(
+            *components[shift : shift + len(fields(PostProcessingOptions))]
+        )
+        logger.debug("%s", pformat(postprocess_options))
+
+        units = [u for u in units if u.enable]
+        if files is not None:
+            images = []
+            for file in files :
+                current_images = []
+                src_image = Image.open(file.name).convert("RGB")
+                swapped_images = swapper.process_images_units(get_current_model(), images=[(src_image,None)], units=units, upscaled_swapper=opts.data.get("roop_upscaled_swapper", False))
+                if len(swapped_images) > 0:
+                    current_images+= [img for img,info in swapped_images]
+
+                logger.info("%s images generated", len(current_images))
+                for i, img in enumerate(current_images) :
+                    current_images[i] = enhance_image(img,postprocess_options)
+
+                for img in current_images :
+                    path = tempfile.NamedTemporaryFile(delete=False,suffix=".png",dir=save_path).name
+                    img.save(path)
+
+                images += current_images
+            return images
+    except Exception as e:
+        logger.error("Batch Process error : %s",e)
+        import traceback
+        traceback.print_exc()
+    return None
 
 
 def tools_ui():
@@ -234,13 +288,36 @@ def tools_ui():
             analyse_btn = gr.Button("Analyse", elem_id="roop_analyse_btn")
             analyse_results = gr.Textbox(label="Results", interactive=False, value="", elem_id="roop_analyse_results")
 
-        upscale_options = upscaler_ui()
+    with gr.Tab("Batch Process"):
+        with gr.Tab("Source Images"):
+            gr.Markdown(
+                """Batch process images. Will apply enhancement in the tools enhancement tab.""")
+            with gr.Row():
+                batch_source_files = gr.components.File(
+                    type="file",
+                    file_count="multiple",
+                    label="Batch Sources Images",
+                    optional=True,
+                    elem_id="roop_batch_images"
+                )
+                batch_results =  gr.Gallery(
+                                        label="Batch result", show_label=False,
+                                        elem_id="roop_batch_results"
+                                    ).style(columns=[2], rows=[2])
+            batch_save_path = gr.Textbox(label="Destination Directory", value="outputs/faceswap/", elem_id="roop_batch_destination")
+            batch_save_btn= gr.Button("Process & Save", elem_id="roop_extract_btn")
+        unit_components = []
+        for i in range(1,opts.data.get("roop_units_count", 3)+1):
+            unit_components += faceswap_unit_ui(False, i, id_prefix="roop_tab")
+
+    upscale_options = upscaler_ui()
 
     explore_btn.click(explore_onnx_faceswap_model, inputs=[model], outputs=[explore_result_text])  
     compare_btn.click(compare, inputs=[img1, img2], outputs=[compare_result_text])
     generate_checkpoint_btn.click(build_face_checkpoint_and_save, inputs=[batch_files, name], outputs=[preview])
     extract_btn.click(extract_faces, inputs=[extracted_source_files, extract_save_path]+upscale_options, outputs=[extracted_faces])  
     analyse_btn.click(analyse_faces, inputs=[img_to_analyse,analyse_det_threshold], outputs=[analyse_results])  
+    batch_save_btn.click(batch_process, inputs=[batch_source_files, batch_save_path]+unit_components+upscale_options, outputs=[batch_results])  
 
 def on_ui_tabs() :
     with gr.Blocks(analytics_enabled=False) as ui_faceswap:

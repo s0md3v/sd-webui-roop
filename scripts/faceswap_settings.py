@@ -32,11 +32,13 @@ def on_ui_settings():
     shared.opts.add_option("roop_upscaled_swapper", shared.OptionInfo(
         False, "Upscaled swapper. Applied only to the swapped faces. Apply transformations before merging with the original image.", gr.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("roop_upscaled_swapper_upscaler", shared.OptionInfo(
-        None, "Upscaled swapper upscaler (Recommanded : LDSR)", gr.Dropdown, {"interactive": True, "choices" : [upscaler.name for upscaler in shared.sd_upscalers]}, section=section))
+        None, "Upscaled swapper upscaler (Recommanded : LDSR but slow)", gr.Dropdown, {"interactive": True, "choices" : [upscaler.name for upscaler in shared.sd_upscalers]}, section=section))
     shared.opts.add_option("roop_upscaled_swapper_sharpen", shared.OptionInfo(
-        True, "Upscaled swapper sharpen", gr.Checkbox, {"interactive": True}, section=section))
+        False, "Upscaled swapper sharpen", gr.Checkbox, {"interactive": True}, section=section))
     shared.opts.add_option("roop_upscaled_swapper_fixcolor", shared.OptionInfo(
-        True, "Upscaled swapper color correction", gr.Checkbox, {"interactive": True}, section=section))    
+        False, "Upscaled swapper color correction", gr.Checkbox, {"interactive": True}, section=section))    
+    shared.opts.add_option("roop_upscaled_improved_mask", shared.OptionInfo(
+        True, "Use improved segmented mask (use pastenet to mask only the face)", gr.Checkbox, {"interactive": True}, section=section))     
     shared.opts.add_option("roop_upscaled_swapper_face_restorer", shared.OptionInfo(
         None, "Upscaled swapper face restorer", gr.Dropdown, {"interactive": True, "choices" : ["None"] + [x.name() for x in shared.face_restorers]}, section=section))
     shared.opts.add_option("roop_upscaled_swapper_face_restorer_visibility", shared.OptionInfo(

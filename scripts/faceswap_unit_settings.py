@@ -13,6 +13,9 @@ from scripts.roop_logging import logger
 
 @dataclass
 class FaceSwapUnitSettings:
+    
+    # ORDER of parameters is IMPORTANT. It should match the result of faceswap_unit_ui
+
     # The image given in reference
     source_img: Union[Image.Image, str]
     # The checkpoint file
@@ -25,7 +28,8 @@ class FaceSwapUnitSettings:
     enable: bool
     # Use same gender filtering
     same_gender: bool
-
+    # Sort faces by their size (from larger to smaller)
+    sort_by_size : bool
     # If True, discard images with low similarity
     check_similarity : bool 
     # if True will compute similarity and add it to the image info
@@ -37,6 +41,9 @@ class FaceSwapUnitSettings:
     min_ref_sim: float
     # The face index to use for swapping
     _faces_index: str
+    # The face index to get image from source
+    reference_face_index : int
+
     # Swap in the source image in img2img (before processing)
     swap_in_source: bool
     # Swap in the generated image in img2img (always on for txt2img)
@@ -59,6 +66,8 @@ class FaceSwapUnitSettings:
         }
         if len(faces_index) == 0:
             return {0}
+
+        logger.debug("FACES INDEX : %s", faces_index)
 
         return faces_index
 
@@ -98,7 +107,7 @@ class FaceSwapUnitSettings:
                         img_bytes = base64.b64decode(self.source_img)
                     self.source_img = Image.open(io.BytesIO(img_bytes))
                 source_img = pil_to_cv2(self.source_img)
-                self._reference_face =  swapper.get_or_default(swapper.get_faces(source_img), 0, None)  
+                self._reference_face =  swapper.get_or_default(swapper.get_faces(source_img), self.reference_face_index, None)  
                 if self._reference_face is None :
                     logger.error("Face not found in reference image")  
             else :

@@ -1,3 +1,12 @@
+## 1.1.0 :
+All listed in features
+
++ add inpainting model selection => allow to select a different model for face inpainting
++ add source faces selection => allow to select the reference face if multiple face are present in reference image
++ add select by size => sort faces by size from larger to smaller
++ add batch option => allow to process images without txt2img or i2i in tabs
++ add segmentation mask for upscaled inpainter (based on codeformer implementation) : avoid square mask and prevent degradation of non-face parts of the image.
+
 ## 0.1.0 :
 
 ### Major :

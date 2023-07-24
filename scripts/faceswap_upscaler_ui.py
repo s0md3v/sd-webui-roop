@@ -1,11 +1,10 @@
 import gradio as gr
 import modules
-from modules import shared
+from modules import shared, sd_models
 from modules.shared import cmd_opts, opts, state
 
 import scripts.roop_postprocessing.upscaling as upscaling
 from scripts.roop_logging import logger
-
 
 def upscaler_ui():
     with gr.Tab(f"Post-Processing"):
@@ -63,6 +62,7 @@ def upscaler_ui():
                     elem_id="roop_pp_inpainting_steps"
                 )
                 
+            inpaiting_model = gr.Dropdown(choices=["Current"]+sd_models.checkpoint_tiles(), default="Current", label="sd model (experimental)", elem_id="roop_pp_inpainting_sd_model")
     return [
         face_restorer_name,
         face_restorer_visibility,
@@ -75,5 +75,6 @@ def upscaler_ui():
         inpainting_denoising_negative_prompt,
         inpainting_denoising_steps,
         inpainting_sampler,
-        inpainting_when
+        inpainting_when,
+        inpaiting_model
     ]
