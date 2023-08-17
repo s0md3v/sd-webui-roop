@@ -141,6 +141,8 @@ class FaceSwapScript(scripts.Script):
         swap_in_source,
         swap_in_generated,
     ):
+        if not enable:
+            return
         self.source = img
         self.face_restorer_name = face_restorer_name
         self.upscaler_scale = upscaler_scale
