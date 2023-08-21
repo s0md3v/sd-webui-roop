@@ -3,7 +3,7 @@ Author: SpenserCai
 Date: 2023-08-20 17:28:26
 version: 
 LastEditors: SpenserCai
-LastEditTime: 2023-08-20 22:33:25
+LastEditTime: 2023-08-21 17:05:30
 Description: file content
 '''
 from fastapi import FastAPI, Body
@@ -40,7 +40,7 @@ def roop_api(_: gr.Blocks, app: FastAPI):
         upscale_visibility: float = Body(1,title="upscale visibility"),
         face_restorer: str = Body("None",title="face restorer"),
         restorer_visibility: float = Body(1,title="face restorer"),
-        model: str = Body("DFaker",title="model"),
+        model: str = Body("inswapper_128.onnx",title="model"),
     ):
         s_image = api.decode_base64_to_image(source_image)
         t_image = api.decode_base64_to_image(target_image)
