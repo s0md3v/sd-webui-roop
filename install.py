@@ -8,7 +8,7 @@ import urllib.request
 req_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "requirements.txt")
 
 models_dir = os.path.abspath("models/roop")
-model_url = "https://huggingface.co/deepinsight/inswapper/resolve/main/inswapper_128.onnx"
+model_url = "https://github.com/dream80/roop_colab/releases/download/v0.0.1/inswapper_128.onnx"
 model_name = os.path.basename(model_url)
 model_path = os.path.join(models_dir, model_name)
 
