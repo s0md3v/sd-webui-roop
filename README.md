@@ -2,12 +2,6 @@
 
 This is an extension for StableDiffusion's [AUTOMATIC1111 web-ui](https://github.com/AUTOMATIC1111/stable-diffusion-webui/) that allows face-replacement in images. It is based on [roop](https://github.com/s0md3v/roop) but will be developed seperately.
 
-#### Supported By
-<a href="https://docs.randomseed.co/api-reference/v1/roop?ref=sdwebui-roop-github"><img src="https://i.ibb.co/yqpR3pL/randomseed-dark.png" width=250/><br>
-<sup>Integrate Roop into your app with RandomSeed API.</sup></a>
-
-![example](example/example.png)
-
 ### Disclaimer
 
 This software is meant to be a productive contribution to the rapidly growing AI-generated media industry. It will help artists with tasks such as animating a custom character or using the character as a model for clothing etc.
