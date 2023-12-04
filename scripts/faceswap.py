@@ -141,12 +141,14 @@ class FaceSwapScript(scripts.Script):
         swap_in_source,
         swap_in_generated,
     ):
+        self.enable = enable
+        if not enable:
+            return
         self.source = img
         self.face_restorer_name = face_restorer_name
         self.upscaler_scale = upscaler_scale
         self.upscaler_visibility = upscaler_visibility
         self.face_restorer_visibility = face_restorer_visibility
-        self.enable = enable
         self.upscaler_name = upscaler_name
         self.swap_in_generated = swap_in_generated
         self.model = model
