@@ -82,7 +82,8 @@ def get_face_single(img_data: np.ndarray, face_index=0, det_size=(640, 640)):
         return get_face_single(img_data, face_index=face_index, det_size=det_size_half)
 
     try:
-        return sorted(face, key=lambda x: x.bbox[0])[face_index]
+        # Put the largest first (x2 - x1) * (y2 - y1)
+        return sorted(face, reverse=True, key=lambda x: (x.bbox[2] - x.bbox[0]) * (x.bbox[3] - x.bbox[1]))[face_index]
     except IndexError:
         return None
 
