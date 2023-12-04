@@ -27,6 +27,11 @@ For rest of the errors, use google. Good luck.
 1. Under "roop" drop-down menu, import an image containing a face.
 2. Turn on the "Enable" checkbox
 3. That's it, now the generated result will have the face you selected
+You can use it with Webui API:
+1. Check the [SD Web API Wiki](https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API) for how to use API
+2. Call requests.get(url=f'{address}/sdapi/v1/script-info') to find the args that roop need.
+3. Define roop script args and add like this "alwayson_scripts": {"roop":{"args":args}} in the payload.
+4. Call the API, there's an [full usage example](./example/api_example.py) in example folder
 
 ## Tips
 #### Getting good quality results
